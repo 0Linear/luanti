@@ -9,3 +9,7 @@ set(benchmark_SRCS
 	${CMAKE_CURRENT_SOURCE_DIR}/benchmark_mapmodify.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/benchmark_sha.cpp
 	PARENT_SCOPE)
+
+set(benchmark_client_SRCS
+	${CMAKE_CURRENT_SOURCE_DIR}/benchmark_meshgen.cpp
+	PARENT_SCOPE)

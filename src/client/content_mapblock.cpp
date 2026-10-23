@@ -87,6 +87,33 @@ MapblockMeshGenerator::MapblockMeshGenerator(MeshMakeData *input, MeshCollector 
 	nodedef(data->m_nodedef),
 	blockpos_nodes(data->m_blockpos * MAP_BLOCKSIZE)
 {
+	if (data->m_smooth_lighting) {
+		// Smooth lighting reads nodes up to 2 away from the drawn ones
+		// (neighbor of a face, plus the corner direction).
+		m_light_cache_area = VoxelArea(blockpos_nodes - 2,
+				blockpos_nodes + data->m_side_length + 1);
+		m_light_cache.resize(m_light_cache_area.getVolume(), SmoothLightNode{});
+
+		// Offsets of the 8 nodes around each corner direction within the
+		// cache, in the order getSmoothLightCorner() visits them
+		const v3s32 &extent = m_light_cache_area.getExtent();
+		for (u8 c = 0; c < 8; c++) {
+			const v3s16 corner((c & 4) ? 1 : -1, (c & 2) ? 1 : -1, (c & 1) ? 1 : -1);
+			const v3s16 dirs[8] = {
+				v3s16(0, 0, 0), v3s16(corner.X, 0, 0),
+				v3s16(0, corner.Y, 0), v3s16(0, 0, corner.Z),
+				v3s16(corner.X, corner.Y, 0), v3s16(corner.X, 0, corner.Z),
+				v3s16(0, corner.Y, corner.Z), corner,
+			};
+			for (u8 i = 0; i < 8; i++)
+				m_light_cache_offsets[c][i] = dirs[i].X +
+						(dirs[i].Y + dirs[i].Z * extent.Y) * extent.X;
+		}
+
+		m_ao_light_amount[0] = std::pow(0.75f, data->m_ao_gamma_inv);
+		m_ao_light_amount[1] = std::pow(0.5f, data->m_ao_gamma_inv);
+		m_ao_light_amount[2] = std::pow(0.25f, data->m_ao_gamma_inv);
+	}
 }
 
 void MapblockMeshGenerator::useTile(TileSpec *tile_ret, int index, u8 set_flags,
@@ -331,15 +358,49 @@ static LightPair getFaceLight(MapNode n, MapNode n2, const NodeDefManager *ndef)
 	return LightPair(day, night);
 }
 
+MapblockMeshGenerator::SmoothLightNode MapblockMeshGenerator::getSmoothLightNode(v3s16 p)
+{
+	SmoothLightNode *slot = nullptr;
+	if (m_light_cache_area.contains(p)) {
+		slot = &m_light_cache[m_light_cache_area.index(p)];
+		if (slot->flags & SLN_VALID)
+			return *slot;
+	}
+
+	SmoothLightNode ret{0, 0, 0, SLN_VALID};
+	MapNode n = data->m_vmanip.getNodeNoExNoEmerge(p);
+	if (n.getContent() == CONTENT_IGNORE) {
+		ret.flags |= SLN_IGNORE;
+	} else {
+		const ContentFeatures &f = nodedef->get(n);
+		ret.source = f.light_source;
+		// Check f.solidness because fast-style leaves look better this way
+		if (f.param_type == CPT_LIGHT && NDT_solidness[f.drawtype] != 2) {
+			const auto lf = f.getLightingFlags();
+			u8 light_level_day = n.getLight(LIGHTBANK_DAY, lf);
+			u8 light_level_night = n.getLight(LIGHTBANK_NIGHT, lf);
+			ret.flags |= SLN_LIT;
+			if (light_level_day == LIGHT_SUN)
+				ret.flags |= SLN_SUN;
+			ret.day = decode_light(light_level_day);
+			ret.night = decode_light(light_level_night);
+		}
+		if (f.light_propagates)
+			ret.flags |= SLN_PROPAGATES;
+	}
+
+	if (slot)
+		*slot = ret;
+	return ret;
+}
+
 /*
 	Calculate smooth lighting at the XYZ- corner of p.
 	Both light banks
 */
-static LightPair getSmoothLightCorner(const v3s16 &p,
-		const v3s16 &corner, MeshMakeData *data)
+LightPair MapblockMeshGenerator::getSmoothLightCorner(const v3s16 &p,
+		const v3s16 &corner)
 {
-	const NodeDefManager *ndef = data->m_nodedef;
-
 	assert(data->m_smooth_lighting);
 
 	const std::array<v3s16,8> dirs {
@@ -363,31 +424,41 @@ static LightPair getSmoothLightCorner(const v3s16 &p,
 	u16 light_night = 0;
 	bool direct_sunlight = false;
 
+	// Fast path: the whole 2x2x2 neighborhood lies in the cache, so entries
+	// can be addressed by offsets from p.
+	const bool cached = m_light_cache_area.contains(p) &&
+			m_light_cache_area.contains(p + corner);
+	const s32 base = cached ? m_light_cache_area.index(p) : 0;
+	const s32 *offsets = m_light_cache_offsets[
+			(corner.X > 0) << 2 | (corner.Y > 0) << 1 | (corner.Z > 0)];
+
 	auto add_node = [&] (u8 i, bool obstructed = false) -> bool {
 		if (obstructed) {
 			ambient_occlusion++;
 			return false;
 		}
-		MapNode n = data->m_vmanip.getNodeNoExNoEmerge(p + dirs[i]);
-		if (n.getContent() == CONTENT_IGNORE)
+		SmoothLightNode n;
+		if (cached) {
+			n = m_light_cache[base + offsets[i]];
+			if (!(n.flags & SLN_VALID))
+				n = getSmoothLightNode(p + dirs[i]);
+		} else {
+			n = getSmoothLightNode(p + dirs[i]);
+		}
+		if (n.flags & SLN_IGNORE)
 			return true;
-		const ContentFeatures &f = ndef->get(n);
 
-		light_source_max = std::max(light_source_max, f.light_source);
-		// Check f.solidness because fast-style leaves look better this way
-		if (f.param_type == CPT_LIGHT && NDT_solidness[f.drawtype] != 2) {
-			const auto lf = f.getLightingFlags();
-			u8 light_level_day = n.getLight(LIGHTBANK_DAY, lf);
-			u8 light_level_night = n.getLight(LIGHTBANK_NIGHT, lf);
-			if (light_level_day == LIGHT_SUN)
+		light_source_max = std::max(light_source_max, n.source);
+		if (n.flags & SLN_LIT) {
+			if (n.flags & SLN_SUN)
 				direct_sunlight = true;
-			light_day += decode_light(light_level_day);
-			light_night += decode_light(light_level_night);
+			light_day += n.day;
+			light_night += n.night;
 			light_count++;
 		} else {
 			ambient_occlusion++;
 		}
-		return f.light_propagates;
+		return n.flags & SLN_PROPAGATES;
 	};
 
 	bool obstructed[4] = { true, true, true, true };
@@ -432,13 +503,9 @@ static LightPair getSmoothLightCorner(const v3s16 &p,
 	}
 
 	if (ambient_occlusion > 4) {
-		float light_amount; // gamma space multiplier
-		if (ambient_occlusion == 5)
-			light_amount = std::pow(0.75f, data->m_ao_gamma_inv);
-		else if (ambient_occlusion == 6)
-			light_amount = std::pow(0.5f, data->m_ao_gamma_inv);
-		else // >= 7
-			light_amount = std::pow(0.25f, data->m_ao_gamma_inv);
+		// gamma space multiplier
+		const float light_amount =
+				m_ao_light_amount[std::min<u16>(ambient_occlusion, 7) - 5];
 
 		if (!skip_ambient_occlusion_day)
 			light_day = rangelim(core::round32(
@@ -457,7 +524,7 @@ void MapblockMeshGenerator::getSmoothLightFrame()
 	for (int k = 0; k < 8; ++k)
 		cur_node.lframe.sunlight[k] = false;
 	for (int k = 0; k < 8; ++k) {
-		LightPair light = getSmoothLightCorner(blockpos_nodes + cur_node.p, light_dirs[k], data);
+		LightPair light = getSmoothLightCorner(blockpos_nodes + cur_node.p, light_dirs[k]);
 		cur_node.lframe.lightsDay[k] = light.lightDay;
 		cur_node.lframe.lightsNight[k] = light.lightNight;
 		// If there is direct sunlight and no ambient occlusion at some corner,
@@ -607,21 +674,16 @@ template <bool LIQUID>
 void MapblockMeshGenerator::drawSolidNode()
 {
 	u8 faces = 0; // k-th bit will be set if k-th face is to be drawn.
-	TileSpec tiles[6];
-	u16 lights[6];
+	u8 culled = 0; // k-th bit will be set if k-th face has backface culling
+	MapNode neighbors[6];
 	content_t n1 = cur_node.n.getContent();
 	v3s16 p1 = blockpos_nodes + cur_node.p;
 
 	auto add_face = [&] (int face, const MapNode &neighbor, bool backface_culling) {
 		faces |= 1 << face;
-		getTile(tile_dirs[face], &tiles[face]);
-		for (auto &layer : tiles[face].layers) {
-			if (backface_culling)
-				layer.material_flags |= MATERIAL_FLAG_BACKFACE_CULLING;
-		}
-		if (!data->m_smooth_lighting) {
-			lights[face] = getFaceLight(cur_node.n, neighbor, nodedef);
-		}
+		if (backface_culling)
+			culled |= 1 << face;
+		neighbors[face] = neighbor;
 	};
 
 	// For a waving liquid source, keep the top face even when a solid node
@@ -684,8 +746,24 @@ void MapblockMeshGenerator::drawSolidNode()
 		}
 		add_face(face, neighbor, backface_culling);
 	}
+	// Most solid nodes are buried: bail out before doing anything expensive
 	if (!faces)
 		return;
+
+	TileSpec tiles[6];
+	u16 lights[6];
+	for (int face = 0; face < 6; face++) {
+		if (!(faces & (1 << face)))
+			continue;
+		getTile(tile_dirs[face], &tiles[face]);
+		if (culled & (1 << face)) {
+			for (auto &layer : tiles[face].layers)
+				layer.material_flags |= MATERIAL_FLAG_BACKFACE_CULLING;
+		}
+		if (!data->m_smooth_lighting)
+			lights[face] = getFaceLight(cur_node.n, neighbors[face], nodedef);
+	}
+
 	u8 mask = faces ^ 0b0011'1111; // k-th bit is set if k-th face is to be *omitted*, as expected by cuboid drawing functions.
 	auto box = aabb3f(v3f(-0.5 * BS), v3f(0.5 * BS));
 	box.MinEdge += cur_node.origin;
@@ -698,7 +776,7 @@ void MapblockMeshGenerator::drawSolidNode()
 			if constexpr (LIQUID) {
 				for (int k = 0; k < 4; k++) {
 					const v3s16 corner = light_dirs[light_indices[face][k]];
-					lights[face][k] = getSmoothLightCorner(p1, corner, data);
+					lights[face][k] = getSmoothLightCorner(p1, corner);
 				}
 			} else {
 				// Solid nodes (usually) obstruct light, so take the light from
@@ -707,7 +785,7 @@ void MapblockMeshGenerator::drawSolidNode()
 				v3s16 p2 = p1 + face_dir;
 				for (int k = 0; k < 4; k++) {
 					const v3s16 corner = light_dirs[light_indices[face][k]] - 2 * face_dir;
-					lights[face][k] = getSmoothLightCorner(p2, corner, data);
+					lights[face][k] = getSmoothLightCorner(p2, corner);
 				}
 			}
 		}

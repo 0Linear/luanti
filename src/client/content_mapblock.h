@@ -6,6 +6,8 @@
 
 #include "nodedef.h"
 #include "tile.h"
+#include "voxel.h"
+#include <vector>
 
 struct MeshMakeData;
 struct MeshCollector;
@@ -68,6 +70,33 @@ private:
 	} cur_node;
 
 // lighting
+	/*
+		What smooth lighting needs to know about a node. Each node takes part
+		in the lighting of up to 24 face corners around it, so this is cached
+		instead of looking up the node and its features every time.
+	*/
+	struct SmoothLightNode {
+		u8 day;    // decoded day light
+		u8 night;  // decoded night light
+		u8 source; // light_source of the node
+		u8 flags;  // SLN_*
+	};
+	enum : u8 {
+		SLN_VALID = 1,      // entry has been filled in
+		SLN_IGNORE = 2,     // CONTENT_IGNORE or outside of the data
+		SLN_LIT = 4,        // node carries light (counts towards the average)
+		SLN_SUN = 8,        // direct sunlight
+		SLN_PROPAGATES = 16 // light passes through
+	};
+	std::vector<SmoothLightNode> m_light_cache;
+	VoxelArea m_light_cache_area;
+	// [corner direction][node] index offsets into m_light_cache
+	s32 m_light_cache_offsets[8][8];
+	// ambient occlusion multipliers for 5, 6 and 7+ occluders
+	f32 m_ao_light_amount[3];
+
+	SmoothLightNode getSmoothLightNode(v3s16 p);
+	LightPair getSmoothLightCorner(const v3s16 &p, const v3s16 &corner);
 	void getSmoothLightFrame();
 	LightInfo blendLight(const v3f &vertex_pos);
 	video::SColor blendLightColor(const v3f &vertex_pos);

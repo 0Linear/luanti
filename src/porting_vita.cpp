@@ -63,7 +63,7 @@ __attribute__((used)) unsigned int _pthread_stack_default_user = 1 * 1024 * 1024
 
 // Main thread parameters, read by vita-elf-create into the process param.
 // The main thread runs the renderer, the client and the main menu Lua.
-__attribute__((used)) const char sceUserMainThreadName[] = "luanti_main";
+__attribute__((used)) char sceUserMainThreadName[] = "luanti_main";
 __attribute__((used)) int sceUserMainThreadPriority = 0x10000100;
 __attribute__((used)) int sceUserMainThreadCpuAffinityMask = SCE_KERNEL_CPU_MASK_USER_0;
 __attribute__((used)) unsigned int sceUserMainThreadStackSize = 4 * 1024 * 1024;

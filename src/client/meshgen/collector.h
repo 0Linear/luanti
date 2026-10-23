@@ -4,6 +4,7 @@
 
 #pragma once
 #include <array>
+#include <cstdint>
 #include <vector>
 #include "irrlichttypes.h"
 #include "irr_v3d.h"
@@ -66,4 +67,8 @@ private:
 			u8 layernum);
 
 	PreMeshBuffer &findBuffer(const TileLayer &layer, u8 layernum, u32 numVertices);
+
+	// Consecutive appends usually go to the same buffer (faces of one node,
+	// runs of the same node), so remember which one was used last.
+	std::array<size_t, MAX_TILE_LAYERS> m_last_buffer = {SIZE_MAX, SIZE_MAX};
 };

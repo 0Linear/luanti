@@ -17,10 +17,10 @@ flat VARYING_ uint varTexLayer;
 vec4 getRelativePosition(in vec4 position)
 {
 	vec2 l = position.xy - CameraPos.xy;
-	vec2 s = l / abs(l);
-	s = (1.0 - s * CameraPos.xy);
-	l /= s;
-	return vec4(l, s);
+	vec2 sgn = l / abs(l);
+	sgn = (1.0 - sgn * CameraPos.xy);
+	l /= sgn;
+	return vec4(l, sgn);
 }
 
 float getPerspectiveFactor(in vec4 relativePosition)

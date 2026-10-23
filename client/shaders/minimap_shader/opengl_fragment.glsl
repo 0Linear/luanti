@@ -11,17 +11,17 @@ void main (void)
 	vec2 uv = varTexCoord.st;
 
 	//texture sampling rate
-	const float step = 1.0 / 256.0;
-	float tl = texture2D(normalTexture, vec2(uv.x - step, uv.y + step)).r;
-	float t  = texture2D(normalTexture, vec2(uv.x,        uv.y + step)).r;
-	float tr = texture2D(normalTexture, vec2(uv.x + step, uv.y + step)).r;
-	float r  = texture2D(normalTexture, vec2(uv.x + step, uv.y       )).r;
-	float br = texture2D(normalTexture, vec2(uv.x + step, uv.y - step)).r;
-	float b  = texture2D(normalTexture, vec2(uv.x,        uv.y - step)).r;
-	float bl = texture2D(normalTexture, vec2(uv.x - step, uv.y - step)).r;
-	float l  = texture2D(normalTexture, vec2(uv.x - step, uv.y       )).r;
+	const float texel = 1.0 / 256.0;
+	float tl = texture2D(normalTexture, vec2(uv.x - texel, uv.y + texel)).r;
+	float tc = texture2D(normalTexture, vec2(uv.x,        uv.y + texel)).r;
+	float tr = texture2D(normalTexture, vec2(uv.x + texel, uv.y + texel)).r;
+	float r  = texture2D(normalTexture, vec2(uv.x + texel, uv.y       )).r;
+	float br = texture2D(normalTexture, vec2(uv.x + texel, uv.y - texel)).r;
+	float b  = texture2D(normalTexture, vec2(uv.x,        uv.y - texel)).r;
+	float bl = texture2D(normalTexture, vec2(uv.x - texel, uv.y - texel)).r;
+	float l  = texture2D(normalTexture, vec2(uv.x - texel, uv.y       )).r;
 	float dX = (tr + 2.0 * r + br) - (tl + 2.0 * l + bl);
-	float dY = (bl + 2.0 * b + br) - (tl + 2.0 * t + tr);
+	float dY = (bl + 2.0 * b + br) - (tl + 2.0 * tc + tr);
 	vec4 bump = vec4 (normalize(vec3 (dX, dY, 0.1)),1.0);
 	float height = 2.0 * texture2D(normalTexture, vec2(uv.x, uv.y)).r - 1.0;
 	vec4 base = texture2D(baseTexture, uv).rgba;

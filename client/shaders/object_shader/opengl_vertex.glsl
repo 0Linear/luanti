@@ -49,10 +49,10 @@ uniform float zPerspectiveBias;
 vec4 getRelativePosition(in vec4 position)
 {
 	vec2 l = position.xy - CameraPos.xy;
-	vec2 s = l / abs(l);
-	s = (1.0 - s * CameraPos.xy);
-	l /= s;
-	return vec4(l, s);
+	vec2 sgn = l / abs(l);
+	sgn = (1.0 - sgn * CameraPos.xy);
+	l /= sgn;
+	return vec4(l, sgn);
 }
 
 float getPerspectiveFactor(in vec4 relativePosition)
@@ -77,8 +77,8 @@ vec4 applyPerspectiveDistortion(in vec4 position)
 #else
 float mtsmoothstep(in float edge0, in float edge1, in float x)
 {
-	float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
-	return t * t * (3.0 - 2.0 * t);
+	float k = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+	return k * k * (3.0 - 2.0 * k);
 }
 #endif
 
