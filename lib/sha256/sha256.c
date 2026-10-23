@@ -99,6 +99,11 @@
 #include <standards.h>
 #include <sys/endian.h>
 
+#elif defined(__vita__)
+#include <machine/endian.h>
+#define be32toh(x) __builtin_bswap32((x))
+#define htobe32(x) __builtin_bswap32((x))
+
 #endif
 
 #ifndef __STRICT_ALIGNMENT

@@ -90,7 +90,7 @@
 #
 # * The value of a boolean setting, such as enable_dynamic_shadows
 # * An engine-defined value:
-#     * desktop / android
+#     * desktop / android / vita
 #     * touch_support
 #     * touchscreen / keyboard_mouse
 #     * shadows_support
@@ -2045,6 +2045,28 @@ shader_path (Shader path) path
 #    Note: A restart is required after changing this!
 #    By default OpenGL3 is preferred on desktop, or OGLES2 on Android.
 video_driver (Video driver) enum  ,opengl,opengl3,ogles2
+
+[**PlayStation Vita] [client]
+
+#    Run the CPU at 444 MHz and the GPU at 222 MHz instead of the
+#    firmware defaults (333/111 MHz). Uses more battery.
+#
+#    Requires: vita
+vita_overclock (Overclock) bool true
+
+#    Size of the GPU parameter buffer in MiB. Larger values avoid partial
+#    scene rendering with long view ranges, at the cost of memory.
+#    Note: A restart is required after changing this!
+#
+#    Requires: vita
+vita_param_buffer_size (GPU parameter buffer size) int 24 4 64
+
+#    Use three framebuffers instead of two so the CPU does not have to wait
+#    for vertical blank. Costs about 2 MiB of video memory.
+#    Note: A restart is required after changing this!
+#
+#    Requires: vita
+vita_triple_buffering (Triple buffering) bool true
 
 #    Distance in nodes at which transparency depth sorting is enabled.
 #    Use this to limit the performance impact of transparency depth sorting.

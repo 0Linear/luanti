@@ -153,6 +153,19 @@ inline u64 getTimeNs() { return os_get_time(1000*1000*1000); }
 
 #else // POSIX
 
+#if defined(__vita__)
+
+// The process timer is a single cheap syscall with microsecond resolution;
+// clock_gettime() goes through newlib and converts back and forth.
+extern "C" unsigned long long sceKernelGetProcessTimeWide(void);
+
+inline u64 getTimeS() { return sceKernelGetProcessTimeWide() / 1000000ULL; }
+inline u64 getTimeMs() { return sceKernelGetProcessTimeWide() / 1000ULL; }
+inline u64 getTimeUs() { return sceKernelGetProcessTimeWide(); }
+inline u64 getTimeNs() { return sceKernelGetProcessTimeWide() * 1000ULL; }
+
+#else
+
 inline void os_get_clock(struct timespec *ts)
 {
 #if defined(CLOCK_MONOTONIC_RAW)
@@ -198,6 +211,8 @@ inline u64 getTimeNs()
 	os_get_clock(&ts);
 	return ((u64) ts.tv_sec) * 1000000000LL + ((u64) ts.tv_nsec);
 }
+
+#endif // __vita__
 
 #endif
 
@@ -247,6 +262,8 @@ inline const char *getPlatformName()
 	return
 #if defined(ANDROID)
 	"Android"
+#elif defined(__vita__)
+	"PlayStation Vita"
 #elif defined(__linux__)
 	"Linux"
 #elif defined(_WIN32) || defined(_WIN64)
@@ -353,4 +370,8 @@ bool open_directory(const std::string &path);
 
 #ifdef __ANDROID__
 #include "porting_android.h"
+#endif
+
+#ifdef __vita__
+#include "porting_vita.h"
 #endif

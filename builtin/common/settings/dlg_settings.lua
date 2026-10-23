@@ -379,7 +379,8 @@ local function check_requirements(name, requires, context)
 	local shadows_support = core.driver_supports_shadows()
 	local special = {
 		android = PLATFORM == "Android",
-		desktop = PLATFORM ~= "Android",
+		vita = PLATFORM == "PlayStation Vita",
+		desktop = PLATFORM ~= "Android" and PLATFORM ~= "PlayStation Vita",
 		touch_support = touch_support,
 		-- When touch_controls is "auto", we don't know which input method will
 		-- be used, so we show settings for both.

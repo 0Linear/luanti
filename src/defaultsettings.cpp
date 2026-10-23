@@ -603,4 +603,85 @@ void set_default_settings()
 	}
 	// Tablets >= 6.0 use non-Android defaults for these settings
 #endif
+
+	// PlayStation Vita: 3 usable Cortex-A9 cores @ 444 MHz, ~365 MiB RAM,
+	// SGX543MP4+ tile-based GPU driving a 960x544 screen.
+	// Everything here trades visual extras for a stable 30 FPS.
+#ifdef __vita__
+	settings->setDefault("vita_overclock", "true");
+	settings->setDefault("vita_param_buffer_size", "24");
+	settings->setDefault("vita_triple_buffering", "true");
+
+	settings->setDefault("video_driver", "ogles2");
+	settings->setDefault("screen_w", "960");
+	settings->setDefault("screen_h", "544");
+	settings->setDefault("fullscreen", "true");
+	settings->setDefault("performance_tradeoffs", "true");
+
+	// Frame pacing: 30 FPS locked to vblank is smoother than an
+	// unstable 40-50.
+	settings->setDefault("vsync", "true");
+	settings->setDefault("fps_max", "30");
+	settings->setDefault("fps_max_unfocused", "10");
+
+	// Draw distance and what gets drawn. The GPU is fill-rate and
+	// draw-call bound; the CPU is mesh-generation bound.
+	settings->setDefault("viewing_range", "48");
+	settings->setDefault("client_mesh_chunk", "2");
+	settings->setDefault("mesh_buffer_min_vertices", "300");
+	settings->setDefault("mesh_generation_threads", "1");
+	settings->setDefault("enable_post_processing", "false");
+	settings->setDefault("enable_dynamic_shadows", "false");
+	settings->setDefault("enable_bloom", "false");
+	settings->setDefault("enable_volumetric_lighting", "false");
+	settings->setDefault("enable_auto_exposure", "false");
+	settings->setDefault("antialiasing", "none");
+	settings->setDefault("enable_3d_clouds", "false");
+	settings->setDefault("cloud_radius", "8");
+	// Alpha-tested and blended geometry defeats the hidden surface removal
+	// of the PowerVR tile renderer, so draw leaves and water opaque.
+	settings->setDefault("leaves_style", "opaque");
+	settings->setDefault("translucent_liquids", "false");
+	settings->setDefault("transparency_sorting_distance", "8");
+	settings->setDefault("enable_waving_water", "false");
+	settings->setDefault("enable_waving_leaves", "false");
+	settings->setDefault("enable_waving_plants", "false");
+	settings->setDefault("mip_map", "false");
+	settings->setDefault("bilinear_filter", "false");
+	settings->setDefault("trilinear_filter", "false");
+	settings->setDefault("anisotropic_filter", "false");
+	settings->setDefault("inventory_items_animations", "false");
+	settings->setDefault("arm_inertia", "false");
+
+	// Memory: client and in-process server each keep their own copy of
+	// loaded map blocks, so keep both sets small and drop them early.
+	settings->setDefault("client_mapblock_limit", "1200");
+	settings->setDefault("client_unload_unused_data_timeout", "60");
+	settings->setDefault("server_unload_unused_data_timeout", "20");
+	settings->setDefault("active_block_range", "2");
+	settings->setDefault("active_object_send_range_blocks", "3");
+	settings->setDefault("max_block_send_distance", "4");
+	settings->setDefault("max_block_generate_distance", "4");
+	settings->setDefault("block_send_optimize_distance", "3");
+	settings->setDefault("max_simultaneous_block_sends_per_client", "12");
+	settings->setDefault("emergequeue_limit_total", "256");
+	settings->setDefault("emergequeue_limit_diskonly", "32");
+	settings->setDefault("emergequeue_limit_generate", "16");
+	settings->setDefault("num_emerge_threads", "1");
+
+	// The memory card is slow; write less often and less carefully.
+	settings->setDefault("server_map_save_interval", "15");
+	settings->setDefault("sqlite_synchronous", "1");
+
+	// No CA bundle available for cURL
+	settings->setDefault("curl_verify_cert", "false");
+
+	// 5" 960x544 screen held at arm's length
+	settings->setDefault("gui_scaling", "0.9");
+	settings->setDefault("hud_scaling", "0.8");
+	settings->setDefault("font_size", "14");
+	settings->setDefault("mono_font_size", "14");
+	settings->setDefault("touch_controls", "auto");
+	settings->setDefault("touch_gui", "false");
+#endif
 }

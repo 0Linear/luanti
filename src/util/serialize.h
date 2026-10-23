@@ -25,6 +25,8 @@
 	#include <machine/endian.h>
 #elif defined(__FreeBSD__) || defined(__DragonFly__)
 	#include <sys/endian.h>
+#elif defined(__vita__)
+	#include <machine/endian.h>
 #else
 	#error "Can't detect endian (missing header)"
 #endif

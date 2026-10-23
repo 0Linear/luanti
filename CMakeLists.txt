@@ -98,6 +98,11 @@ if(ANDROID)
 	include(AndroidLibs)
 endif()
 
+# Load default options for the PlayStation Vita (set by the VitaSDK toolchain file)
+if(VITA)
+	include(VitaLibs)
+endif()
+
 
 if(TRUE)
 	if(BUILD_CLIENT)
@@ -155,6 +160,13 @@ elseif(APPLE)
 	set(DOCDIR "${SHAREDIR}/${PROJECT_NAME}")
 	set(EXAMPLE_CONF_DIR ${DOCDIR})
 	set(LOCALEDIR "${SHAREDIR}/locale")
+elseif(VITA)
+	# Everything ends up inside the VPK (app0:), see cmake/Modules/VitaPackage.cmake
+	set(SHAREDIR ".")
+	set(BINDIR ".")
+	set(DOCDIR "doc")
+	set(EXAMPLE_CONF_DIR ".")
+	set(LOCALEDIR "locale")
 elseif(UNIX) # Linux, BSD etc
 	if(RUN_IN_PLACE)
 		set(SHAREDIR ".")

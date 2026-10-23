@@ -603,6 +603,14 @@ bool CIrrDeviceSDL::createWindowWithContext()
 
 	SDL_GL_ResetAttributes();
 
+#ifdef __vita__
+	// One fixed-size screen; vitaGL renders straight to it.
+	Width = 960;
+	Height = 544;
+	SDL_Flags |= SDL_WINDOW_FULLSCREEN;
+	SDL_Flags &= ~(SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED);
+#endif
+
 #ifdef _IRR_EMSCRIPTEN_PLATFORM_
 	if (Width != 0 || Height != 0)
 		emscripten_set_canvas_size(Width, Height);
@@ -797,6 +805,16 @@ bool CIrrDeviceSDL::run()
 	while (!Close && wrap_PollEvent(&SDL_event)) {
 		// os::Printer::log("event: ", core::stringc((int)SDL_event.type).c_str(),   ELL_INFORMATION);	// just for debugging
 		irrevent = {};
+
+#ifdef __vita__
+		// The rear touchpad shows up as a second touch device. Only the front
+		// panel maps to the screen, so ignore the rear one.
+		if ((SDL_event.type == SDL_EVENT_FINGER_DOWN ||
+				SDL_event.type == SDL_EVENT_FINGER_MOTION ||
+				SDL_event.type == SDL_EVENT_FINGER_UP) &&
+				SDL_event.tfinger.touchId != 0)
+			continue;
+#endif
 
 		switch (SDL_event.type) {
 		case SDL_EVENT_MOUSE_MOTION: {

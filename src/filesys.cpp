@@ -297,7 +297,14 @@ bool PathExists(const std::string &path)
 
 bool IsPathAbsolute(const std::string &path)
 {
+#ifdef __vita__
+	// Vita paths are rooted at a device, e.g. "ux0:data/luanti"
+	size_t colon = path.find(':');
+	return colon != std::string::npos && colon > 0 &&
+		path.find('/') > colon;
+#else
 	return path[0] == '/';
+#endif
 }
 
 bool IsDir(const std::string &path)
@@ -343,7 +350,7 @@ bool DeleteSingleFileOrEmptyDirectory(const std::string &path, bool log_error)
 
 std::string TempPath()
 {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__vita__)
 	return porting::path_cache;
 #else
 	const char *env_tmpdir = getenv("TMPDIR");
@@ -472,6 +479,29 @@ bool CopyFileContents(const std::string &source, const std::string &target)
  * portable implementations *
  ****************************/
 
+#ifdef __vita__
+// newlib's libstdc++ filesystem support is incomplete on the Vita and there
+// are no symlinks to worry about, so walk the tree ourselves.
+static bool RecursiveDeleteImpl(const std::string &path)
+{
+	if (IsDir(path)) {
+		for (const auto &node : GetDirListing(path)) {
+			if (!RecursiveDeleteImpl(path + DIR_DELIM + node.name))
+				return false;
+		}
+	}
+	return DeleteSingleFileOrEmptyDirectory(path, true);
+}
+
+bool RecursiveDelete(const std::string &path)
+{
+	assert(IsPathAbsolute(path));
+	if (!PathExists(path))
+		return true;
+	infostream << "Recursively deleting \"" << path << "\"" << std::endl;
+	return RecursiveDeleteImpl(path);
+}
+#else
 bool RecursiveDelete(const std::string &path)
 {
 	assert(IsPathAbsolute(path));
@@ -517,6 +547,7 @@ bool RecursiveDelete(const std::string &path)
 	}
 	return true;
 }
+#endif
 
 void GetRecursiveDirs(std::vector<std::string> &dirs, const std::string &dir)
 {
@@ -817,6 +848,26 @@ std::string RemoveRelativePathComponents(std::string path)
 
 std::string AbsolutePath(const std::string &path)
 {
+#ifdef __vita__
+	// No symlinks on the Vita: resolving "." and ".." is all realpath() would
+	// do, but newlib's version does not understand device prefixes.
+	if (path.empty() || !PathExists(path))
+		return "";
+	std::string full = path;
+	if (!IsPathAbsolute(full)) {
+		char cwd[1024];
+		if (!getcwd(cwd, sizeof(cwd)))
+			return "";
+		full = std::string(cwd) + DIR_DELIM + full;
+	}
+	std::string resolved = RemoveRelativePathComponents(full);
+	if (resolved.empty())
+		return "";
+	// "ux0:" alone needs its delimiter to stay a valid root
+	if (resolved.back() == ':')
+		resolved += DIR_DELIM;
+	return resolved;
+#else
 #ifdef _WIN32
 	// handle behavior differences on windows
 	if (path.empty())
@@ -838,6 +889,7 @@ std::string AbsolutePath(const std::string &path)
 	while (abs_path_str.length() > root_string.length() && IsDirDelimiter(abs_path_str.back()))
 		abs_path_str.pop_back();
 	return abs_path_str;
+#endif
 }
 
 std::string AbsolutePathPartial(const std::string &path)

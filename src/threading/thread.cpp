@@ -183,6 +183,9 @@ void Thread::threadProc(Thread *thr)
 	current_thread = thr;
 
 	thr->setName(thr->m_name);
+#ifdef __vita__
+	porting::vita::onThreadStart(thr->m_name);
+#endif
 
 	g_logger.registerThread(thr->m_name);
 	thr->m_running = true;

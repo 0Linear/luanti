@@ -144,6 +144,12 @@ void Database_SQLite3::openDatabase()
 		"Failed to set SQLite3 synchronous mode");
 	SQLOK(sqlite3_exec(m_database, "PRAGMA foreign_keys = ON", NULL, NULL, NULL),
 		"Failed to enable SQLite3 foreign key support");
+#ifdef __vita__
+	// Creating and deleting the rollback journal for every transaction is
+	// slow on the memory card; keep it around and just invalidate it.
+	SQLOK(sqlite3_exec(m_database, "PRAGMA journal_mode = PERSIST", NULL, NULL, NULL),
+		"Failed to set SQLite3 journal mode");
+#endif
 }
 
 void Database_SQLite3::verifyDatabase()

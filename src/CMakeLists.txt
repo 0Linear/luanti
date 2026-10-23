@@ -536,6 +536,10 @@ if(ANDROID)
 	list(APPEND common_SRCS porting_android.cpp)
 endif()
 
+if(VITA)
+	list(APPEND common_SRCS porting_vita.cpp)
+endif()
+
 if(BUILD_UNITTESTS OR BUILD_BENCHMARKS)
 	list(APPEND common_SRCS catch.cpp)
 endif()
@@ -1104,12 +1108,14 @@ macro(CreateLegacyAlias _cmake_target _old_path _new_name)
 endmacro()
 
 if(BUILD_CLIENT AND NOT ANDROID)
-	install(TARGETS ${PROJECT_NAME}
-		RUNTIME DESTINATION ${BINDIR}
-		LIBRARY DESTINATION ${BINDIR}
-		ARCHIVE DESTINATION ${BINDIR}
-		BUNDLE DESTINATION .
-	)
+	if(NOT VITA) # the Vita gets an eboot.bin, see VitaPackage.cmake
+		install(TARGETS ${PROJECT_NAME}
+			RUNTIME DESTINATION ${BINDIR}
+			LIBRARY DESTINATION ${BINDIR}
+			ARCHIVE DESTINATION ${BINDIR}
+			BUNDLE DESTINATION .
+		)
+	endif()
 	if(UNIX)
 		CreateLegacyAlias(minetest_alias "${EXECUTABLE_OUTPUT_PATH}/minetest" ${PROJECT_NAME})
 	endif()
@@ -1165,4 +1171,8 @@ elseif (USE_GETTEXT)
 	endforeach()
 
 	add_custom_target(translations ALL COMMENT "mo-update" DEPENDS ${MO_FILES})
+endif()
+
+if(VITA AND BUILD_CLIENT)
+	include(VitaPackage)
 endif()

@@ -25,7 +25,7 @@
 #if !defined(_WIN32)
 	#include <unistd.h>
 	#include <sys/utsname.h>
-	#if !defined(__ANDROID__)
+	#if !defined(__ANDROID__) && !defined(__vita__)
 		#include <spawn.h>
 	#endif
 #endif
@@ -281,6 +281,8 @@ static std::string detectSystemInfo()
 	delete[] lpVersionInfo;
 
 	return oss.str();
+#elif defined(__vita__)
+	return "PlayStation Vita armv7l";
 #elif defined(__ANDROID__)
 	std::ostringstream oss;
 	struct utsname osinfo;
@@ -316,6 +318,8 @@ u32 getMemorySizeMB()
 	status.dwLength = sizeof(status);
 	if (GlobalMemoryStatusEx(&status))
 		return status.ullTotalPhys >> 20;
+#elif defined(__vita__)
+	return vita::getMemoryBudgetMB();
 #elif defined(__unix__) && defined(_SC_PHYS_PAGES) && defined(_SC_PAGE_SIZE)
 	long pages = sysconf(_SC_PHYS_PAGES);
 	long page_size = sysconf(_SC_PAGE_SIZE);
@@ -678,7 +682,13 @@ static void createCacheDirTag()
 
 void initializePaths()
 {
-#if RUN_IN_PLACE
+#if defined(__vita__)
+	// Read-only data ships inside the VPK, everything else goes to the
+	// memory card.
+	path_share = vita::SHARE_DIR;
+	path_user = vita::USER_DIR;
+	path_cache = path_user + DIR_DELIM "cache";
+#elif RUN_IN_PLACE
 	infostream << "Using relative paths (RUN_IN_PLACE)" << std::endl;
 
 	char buf[PATH_MAX];
@@ -804,6 +814,13 @@ bool secure_rand_fill_buf(void *buf, size_t len)
 	return success;
 }
 
+#elif defined(__vita__)
+
+bool secure_rand_fill_buf(void *buf, size_t len)
+{
+	return vita::secureRandom(buf, len);
+}
+
 #else
 
 bool secure_rand_fill_buf(void *buf, size_t len)
@@ -835,6 +852,8 @@ void osSpecificInit()
 	SetSearchPathMode(BASE_SEARCH_PATH_ENABLE_SAFE_SEARCHMODE |
 		BASE_SEARCH_PATH_PERMANENT);
 	SetProcessDEPPolicy(PROCESS_DEP_ENABLE);
+#elif defined(__vita__)
+	vita::init();
 #endif
 }
 
@@ -942,6 +961,8 @@ static bool open_uri(const std::string &uri)
 #elif defined(__ANDROID__)
 	openURIAndroid(uri.c_str());
 	return true;
+#elif defined(__vita__)
+	return vita::openURL(uri);
 #elif defined(__APPLE__)
 	const char *argv[] = {"open", uri.c_str(), NULL};
 	return posix_spawnp(NULL, "open", NULL, NULL, (char**)argv,
