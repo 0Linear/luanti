@@ -43,11 +43,14 @@
 	 1. The newlib heap, a single memblock reserved at process start for
 	    malloc/new. All engine data (map, Lua, meshes on the CPU side) lives
 	    here. Size: VITA_NEWLIB_HEAP_MB (CMake option).
-	 2. vitaGL's RAM pool, which it claims from whatever is left when the GL
-	    context is created, minus a 12 MiB threshold kept back by SDL.
-	    Textures and vertex buffers first go to CDRAM (VRAM) and spill here.
-	 3. That 12 MiB threshold: thread stacks (created after the context),
-	    the network stack and system dialogs.
+	 2. vitaGL's RAM pool, which it claims from whatever is left when it is
+	    initialized, minus SYSTEM_RESERVE. Textures and vertex buffers first
+	    go to CDRAM (VRAM) and spill here.
+	 3. SYSTEM_RESERVE: memory blocks the system allocates on our behalf
+	    after that point: stacks of the ~14 threads Luanti starts, LuaJIT's
+	    machine code areas, the Cg compiler module and system dialogs.
+	    (SDL would only keep 12 MiB, which is not enough for all of that,
+	    so we initialize vitaGL ourselves before SDL does.)
 */
 extern "C" {
 // Picked up by newlib's _init_vita_heap() before any constructor runs.
@@ -75,6 +78,9 @@ namespace vita
 // SceNet needs a memory pool of its own; 1 MiB is enough for a handful of
 // UDP sockets plus cURL's TCP connections.
 static constexpr size_t NET_MEMORY_SIZE = 1 * 1024 * 1024;
+
+// See "Memory layout" above
+static constexpr int SYSTEM_RESERVE = 32 * 1024 * 1024;
 static void *s_net_memory = nullptr;
 
 static void setClocks(bool max)
@@ -199,6 +205,25 @@ void preVideoInit()
 	// vitaGL's garbage collector frees GPU resources once the GPU is done
 	// with them. Keep it off the render core.
 	vglSetupGarbageCollector(0x10000100 + 10, SCE_KERNEL_CPU_MASK_USER_2);
+
+	// MSAA is cheap-ish on a tile based GPU since resolving happens on chip,
+	// but it still costs fill rate and memory, so it's opt-in.
+	SceGxmMultisampleMode msaa = SCE_GXM_MULTISAMPLE_NONE;
+	if (g_settings->get("antialiasing") == "fsaa")
+		msaa = g_settings->getU16("fsaa") >= 4 ? SCE_GXM_MULTISAMPLE_4X :
+			SCE_GXM_MULTISAMPLE_2X;
+
+	// Same as SDL's vglInitExtended() call, which then becomes a no-op,
+	// except for the amount of memory left to the system.
+	sceSysmoduleLoadModule(SCE_SYSMODULE_IME);
+	// Common dialog memory: keep all of it (vitaGL's private
+	// SCE_KERNEL_MAX_MAIN_CDIALOG_MEM_SIZE) for the IME and message boxes.
+	constexpr int CDIALOG_MEM_SIZE = 0x8C6000;
+	vglInitWithCustomThreshold(0, 960, 544, SYSTEM_RESERVE, 0, 0,
+		CDIALOG_MEM_SIZE, msaa);
+
+	infostream << "Vita: free memory after vitaGL init: "
+		<< (getFreeMemory() >> 20) << " MiB" << std::endl;
 }
 
 void postVideoInit()

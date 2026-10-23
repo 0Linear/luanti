@@ -683,6 +683,9 @@ void set_default_settings()
 
 	// No CA bundle available for cURL
 	settings->setDefault("curl_verify_cert", "false");
+	// The Vita network stack is IPv4 only
+	settings->setDefault("enable_ipv6", "false");
+	settings->setDefault("ipv6_server", "false");
 
 	// 5" 960x544 screen held at arm's length
 	settings->setDefault("gui_scaling", "0.9");

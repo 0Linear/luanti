@@ -266,7 +266,12 @@ void Thread::setName(const std::string &name)
 
 unsigned int Thread::getNumberOfProcessors()
 {
+#ifdef __vita__
+	// Four cores, but the fourth belongs to the system
+	return 3;
+#else
 	return std::thread::hardware_concurrency();
+#endif
 }
 
 

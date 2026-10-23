@@ -149,6 +149,9 @@ void Database_SQLite3::openDatabase()
 	// slow on the memory card; keep it around and just invalidate it.
 	SQLOK(sqlite3_exec(m_database, "PRAGMA journal_mode = PERSIST", NULL, NULL, NULL),
 		"Failed to set SQLite3 journal mode");
+	// ...but don't let a single large transaction keep it big forever
+	SQLOK(sqlite3_exec(m_database, "PRAGMA journal_size_limit = 4194304", NULL, NULL, NULL),
+		"Failed to set SQLite3 journal size limit");
 #endif
 }
 
