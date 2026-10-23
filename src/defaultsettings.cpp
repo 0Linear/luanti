@@ -106,6 +106,8 @@ void set_default_settings()
 	settings->setDefault("mesh_generation_threads", "0");
 	settings->setDefault("mesh_buffer_min_vertices", "300");
 	settings->setDefault("free_static_mesh_data", "false");
+	settings->setDefault("vertex_fog", "false");
+	settings->setDefault("vertex_fog", "false");
 	settings->setDefault("free_move", "false");
 	settings->setDefault("pitch_move", "false");
 	settings->setDefault("fast_move", "false");
@@ -621,6 +623,10 @@ void set_default_settings()
 	settings->setDefault("emulate_array_textures", "true");
 	// Map meshes live in GPU memory only, see MapBlockMesh
 	settings->setDefault("free_static_mesh_data", "true");
+	// Saves a sqrt and four pow() per pixel; the GPU is fill-rate bound
+	settings->setDefault("vertex_fog", "true");
+	// Saves a sqrt and four pow() per pixel; the GPU is fill-rate bound
+	settings->setDefault("vertex_fog", "true");
 	settings->setDefault("screen_w", "960");
 	settings->setDefault("screen_h", "544");
 	settings->setDefault("fullscreen", "true");

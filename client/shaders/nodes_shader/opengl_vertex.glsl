@@ -43,6 +43,14 @@ CENTROID_ VARYING_ float nightRatio;
 #endif
 
 VARYING_ highp vec3 eyeVec;
+#ifdef VERTEX_FOG
+// Fog is computed per vertex instead of per pixel, see the fragment shader
+uniform lowp vec4 fogColor;
+uniform float fogDistance;
+uniform float fogShadingParameter;
+VARYING_ lowp vec4 vFogColor;
+VARYING_ lowp float vFogClarity;
+#endif
 // Color of the light emitted by the light sources.
 const vec3 artificialLight = vec3(1.04, 1.04, 1.04);
 
@@ -202,6 +210,16 @@ void main(void)
 	gl_Position = mWorldViewProj * pos;
 
 	eyeVec = -(mWorldView * pos).xyz;
+#ifdef VERTEX_FOG
+	{
+		float clarity = clamp(fogShadingParameter
+			- fogShadingParameter * length(eyeVec) / fogDistance, 0.0, 1.0);
+		float fogColorMax = max(max(fogColor.r, fogColor.g), fogColor.b);
+		if (fogColorMax < 0.0000001) fogColorMax = 1.0;
+		vFogColor = fogColor * pow(fogColor / fogColorMax, vec4(2.0 * clarity));
+		vFogClarity = clarity;
+	}
+#endif
 #ifdef SECONDSTAGE
 	normalPass = normalize((inVertexNormal+1)/2);
 #endif

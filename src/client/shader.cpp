@@ -254,6 +254,11 @@ public:
 
 		if (g_settings->getBool("enable_volumetric_lighting"))
 			constants["VOLUMETRIC_LIGHT"] = 1;
+
+		// Shadows and water reflections need the fog color per pixel
+		if (g_settings->getBool("vertex_fog") &&
+				!g_settings->getBool("enable_dynamic_shadows"))
+			constants["VERTEX_FOG"] = 1;
 	}
 };
 

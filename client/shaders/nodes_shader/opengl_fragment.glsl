@@ -7,9 +7,14 @@
 uniform sampler2D crackTexture;
 
 uniform vec3 dayLight;
+#ifdef VERTEX_FOG
+VARYING_ lowp vec4 vFogColor;
+VARYING_ lowp float vFogClarity;
+#else
 uniform lowp vec4 fogColor;
 uniform float fogDistance;
 uniform float fogShadingParameter;
+#endif
 
 // The cameraOffset is the current center of the visible world.
 uniform highp vec3 cameraOffset;
@@ -589,6 +594,9 @@ void main(void)
 	}
 #endif
 
+#ifdef VERTEX_FOG
+	col = mix(vFogColor, col, vFogClarity);
+#else
 	// Due to a bug in some (older ?) graphics stacks (possibly in the glsl compiler ?),
 	// the fog will only be rendered correctly if the last operation before the
 	// clamp() is an addition. Else, the clamp() seems to be ignored.
@@ -607,6 +615,7 @@ void main(void)
 	// For this to not make the fog color artificially dark we need to normalize using the
 	// fog color's brightest value. We then blend our base color with this to make the fog.
 	col = mix(fogColor * pow(fogColor / fogColorMax, vec4(2.0 * clarity)), col, clarity);
+#endif
 	col = vec4(col.rgb, base.a);
 
 	gl_FragColor = col;

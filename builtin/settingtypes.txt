@@ -2057,6 +2057,16 @@ emulate_array_textures (Emulate array textures) bool false
 #    the GPU. Saves a lot of memory on devices where both share the same RAM.
 free_static_mesh_data (Free static mesh data) bool false
 
+#    Calculate fog per vertex instead of per pixel. Much cheaper on slow GPUs,
+#    but fog boundaries look slightly less smooth. Not used with dynamic shadows.
+#    Note: A restart is required after changing this!
+vertex_fog (Per-vertex fog) bool false
+
+#    Calculate fog per vertex instead of per pixel. Much cheaper on slow GPUs,
+#    but fog boundaries look slightly less smooth. Not used with dynamic shadows.
+#    Note: A restart is required after changing this!
+vertex_fog (Per-vertex fog) bool false
+
 [**PlayStation Vita] [client]
 
 #    Run the CPU at 444 MHz and the GPU at 222 MHz instead of the
