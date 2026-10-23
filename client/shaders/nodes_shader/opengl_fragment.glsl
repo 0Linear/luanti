@@ -441,6 +441,8 @@ void main(void)
 
 #ifdef USE_ARRAY_TEXTURE
 	vec4 base = texture(baseTexture, vec3(uv, float(varTexLayer))).rgba;
+#elif defined(USE_ATLAS_TEXTURE)
+	vec4 base = texture2D(baseTexture, atlasUV(uv)).rgba;
 #else
 	vec4 base = texture2D(baseTexture, uv).rgba;
 #endif

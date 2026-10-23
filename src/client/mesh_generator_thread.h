@@ -114,6 +114,8 @@ private:
 	// TODO: Add callback to update these when g_settings changes, and update all meshes
 	bool m_cache_smooth_lighting;
 	bool m_cache_enable_water_reflections;
+	bool m_cache_free_static_mesh_data;
+	u32 m_cache_mesh_buffer_min_vertices;
 	bool m_cache_enable_waving_water;
 
 	void fillDataFromMapBlocks(QueuedMeshUpdate *q);

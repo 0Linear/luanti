@@ -45,11 +45,21 @@ public:
 
 	u32 getCount() const override
 	{
-		return static_cast<u32>(Data.size());
+		return DataReleased ? ReleasedCount : static_cast<u32>(Data.size());
+	}
+
+	void releaseData() override
+	{
+		ReleasedCount = static_cast<u32>(Data.size());
+		std::vector<T>().swap(Data);
+		DataReleased = true;
 	}
 
 	//! Indices of this buffer
 	std::vector<T> Data;
+
+private:
+	u32 ReleasedCount = 0;
 };
 
 //! Standard 16-bit buffer

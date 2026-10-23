@@ -40,6 +40,9 @@ void init();
 /// Configures vitaGL (memory pools, shader compiler, caches).
 void preVideoInit();
 
+/// Called right after the video device has been created.
+void postVideoInit();
+
 /// Called when a Luanti thread starts. Pins it to a core and adjusts its
 /// priority based on its role.
 void onThreadStart(const std::string &name);

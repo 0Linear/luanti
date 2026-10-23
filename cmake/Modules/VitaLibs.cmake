@@ -45,13 +45,16 @@ set(REQUIRE_LUAJIT TRUE CACHE BOOL "" FORCE)
 
 # Explicit library locations (avoids picking up host libraries by accident).
 # These need to be cache entries since the find modules use find_library().
+# Values given on the command line (e.g. a self-built cURL) take precedence.
 macro(vita_dep var value)
-	set(${var} "${value}" CACHE STRING "" FORCE)
+	if(NOT ${var} OR "${${var}}" MATCHES "-NOTFOUND$")
+		set(${var} "${value}" CACHE STRING "" FORCE)
+	endif()
 endmacro()
 vita_dep(ZLIB_INCLUDE_DIR "${VITA_INCDIR}")
 vita_dep(ZLIB_LIBRARY "${VITA_LIBDIR}/libz.a")
 vita_dep(ZSTD_INCLUDE_DIR "${VITA_INCDIR}")
-vita_dep(ZSTD_LIBRARY "${VITA_LIBDIR}/libzstd.a;${VITA_LIBDIR}/libpthread.a")
+vita_dep(ZSTD_LIBRARY "${VITA_LIBDIR}/libzstd.a;-pthread")
 vita_dep(PNG_PNG_INCLUDE_DIR "${VITA_INCDIR}")
 vita_dep(PNG_LIBRARY "${VITA_LIBDIR}/libpng16.a")
 vita_dep(JPEG_INCLUDE_DIR "${VITA_INCDIR}")
@@ -144,6 +147,8 @@ set(VITA_SYSTEM_LIBS
 	vitaGL
 	vitashark
 	mathneon
-	pthread
+	# private dependencies of the static libzip
+	lzma
+	bz2
 	m
 )

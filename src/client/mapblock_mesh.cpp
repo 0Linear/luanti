@@ -560,6 +560,13 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 			} else {
 				buf->append(&p.vertices[0], p.vertices.size(),
 					&p.indices[0], p.indices.size());
+				// Opaque geometry is never touched again after upload, unless
+				// ClientMap merges small buffers (mesh_buffer_min_vertices).
+				if (data->m_free_static_mesh_data &&
+						p.vertices.size() >= data->m_mesh_buffer_min_vertices) {
+					buf->Vertices->ReleaseDataAfterUpload = true;
+					buf->Indices->ReleaseDataAfterUpload = true;
+				}
 			}
 			mesh->addMeshBuffer(buf);
 			buf->drop();

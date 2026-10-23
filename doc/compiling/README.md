@@ -3,6 +3,7 @@
 - [Compiling on GNU/Linux](linux.md)
 - [Compiling on Windows](windows.md)
 - [Compiling on MacOS](macos.md)
+- [Compiling for the PlayStation Vita](../vita.md#building)
 
 
 ## CMake options

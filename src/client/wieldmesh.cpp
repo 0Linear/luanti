@@ -149,7 +149,7 @@ void getAdHocNodeShader(video::SMaterial &mat, IShaderSource *shdsrc,
 
 	bool array_texture = false;
 	if (mat.getTexture(0))
-		array_texture = mat.getTexture(0)->getType() == video::ETT_2D_ARRAY;
+		array_texture = isArrayTexture(mat.getTexture(0));
 
 	ShaderFeatures features;
 	features.array_texture = array_texture;

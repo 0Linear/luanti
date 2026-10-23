@@ -2046,6 +2046,17 @@ shader_path (Shader path) path
 #    By default OpenGL3 is preferred on desktop, or OGLES2 on Android.
 video_driver (Video driver) enum  ,opengl,opengl3,ogles2
 
+#    On drivers without array textures (OpenGL ES 2), pack node textures of
+#    the same size into texture atlases instead. Lets many nodes share one
+#    material, which cuts down draw calls a lot.
+#    Only used when mipmapping and texture filtering are disabled.
+#    Note: A restart is required after changing this!
+emulate_array_textures (Emulate array textures) bool false
+
+#    Free the main memory copy of map meshes once they have been uploaded to
+#    the GPU. Saves a lot of memory on devices where both share the same RAM.
+free_static_mesh_data (Free static mesh data) bool false
+
 [**PlayStation Vita] [client]
 
 #    Run the CPU at 444 MHz and the GPU at 222 MHz instead of the
@@ -2067,6 +2078,20 @@ vita_param_buffer_size (GPU parameter buffer size) int 24 4 64
 #
 #    Requires: vita
 vita_triple_buffering (Triple buffering) bool true
+
+#    Compile Lua code to native ARM code (LuaJIT JIT). Much faster mods and
+#    map generation. Disable if the game crashes in Lua code.
+#
+#    Requires: vita
+vita_luajit_jit (LuaJIT JIT compiler) bool true
+
+#    With VSync enabled, show each frame for this many display refreshes:
+#    1 = 60 FPS, 2 = 30 FPS, 3 = 20 FPS. A stable 30 FPS feels smoother than
+#    a framerate jumping between 30 and 60.
+#    Note: A restart is required after changing this!
+#
+#    Requires: vita
+vita_vblank_interval (Refreshes per frame) int 2 1 4
 
 #    Distance in nodes at which transparency depth sorting is enabled.
 #    Use this to limit the performance impact of transparency depth sorting.

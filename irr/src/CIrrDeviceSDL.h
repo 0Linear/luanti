@@ -11,6 +11,7 @@
 #include "IrrlichtDevice.h"
 #include "CIrrDeviceStub.h"
 #include "ICursorControl.h"
+#include "ITexture.h"
 
 #ifdef _IRR_USE_SDL3_
 #define SDL_DISABLE_OLD_NAMES
@@ -311,6 +312,26 @@ private:
 #endif // _IRR_USE_SDL3_
 	SDL_Gamepad *getRecentGamepad() const;
 #endif // _IRR_COMPILE_WITH_JOYSTICK_EVENTS_
+
+#ifdef __vita__
+	/*
+		The Vita has no mouse. While the cursor is visible (= a menu is
+		open), the left stick moves a software pointer, Cross/Square click
+		with it, Circle acts as Escape and the right stick scrolls.
+	*/
+	bool vitaPointerButton(GamepadButton button, bool down);
+	bool vitaPointerAxis(GamepadAxis axis, s16 value);
+	void vitaPointerUpdate();
+	void vitaPointerDraw();
+	void postVitaMouseEvent(EMOUSE_INPUT_EVENT ev);
+	void postVitaKeyEvent(EKEY_CODE key, u32 scancode, bool down);
+	s16 VitaStick[4] = {};
+	f32 VitaPointerX = 480.0f, VitaPointerY = 272.0f;
+	f32 VitaScrollAccum = 0.0f;
+	u32 VitaLastUpdate = 0;
+	bool VitaPointerShown = false;
+	video::ITexture *VitaPointerTexture = nullptr;
+#endif
 
 	s32 MouseX, MouseY;
 	// these two only continue to exist for some Emscripten stuff idk about

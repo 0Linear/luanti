@@ -50,6 +50,10 @@ struct MeshMakeData
 	bool m_generate_minimap = false;
 	bool m_smooth_lighting = false;
 	bool m_enable_water_reflections = false;
+	/// Free CPU copies of opaque mesh buffers with at least
+	/// m_mesh_buffer_min_vertices vertices after they've been uploaded
+	bool m_free_static_mesh_data = false;
+	u32 m_mesh_buffer_min_vertices = 0;
 	bool m_enable_waving_water = false;
 
 	const NodeDefManager *m_nodedef;

@@ -105,6 +105,7 @@ void set_default_settings()
 	settings->setDefault("mesh_generation_interval", "0");
 	settings->setDefault("mesh_generation_threads", "0");
 	settings->setDefault("mesh_buffer_min_vertices", "300");
+	settings->setDefault("free_static_mesh_data", "false");
 	settings->setDefault("free_move", "false");
 	settings->setDefault("pitch_move", "false");
 	settings->setDefault("fast_move", "false");
@@ -266,6 +267,7 @@ void set_default_settings()
 	settings->setDefault("smooth_lighting", "true");
 	settings->setDefault("performance_tradeoffs", "false");
 	settings->setDefault("array_texture_max", "65535");
+	settings->setDefault("emulate_array_textures", "false");
 	settings->setDefault("lighting_alpha", "0.0");
 	settings->setDefault("lighting_beta", "1.5");
 	settings->setDefault("display_gamma", "1.0");
@@ -611,17 +613,23 @@ void set_default_settings()
 	settings->setDefault("vita_overclock", "true");
 	settings->setDefault("vita_param_buffer_size", "24");
 	settings->setDefault("vita_triple_buffering", "true");
+	settings->setDefault("vita_luajit_jit", "true");
+	settings->setDefault("vita_vblank_interval", "2");
 
 	settings->setDefault("video_driver", "ogles2");
+	// Fewer draw calls, see TextureSource::generateAtlasTexture
+	settings->setDefault("emulate_array_textures", "true");
+	// Map meshes live in GPU memory only, see MapBlockMesh
+	settings->setDefault("free_static_mesh_data", "true");
 	settings->setDefault("screen_w", "960");
 	settings->setDefault("screen_h", "544");
 	settings->setDefault("fullscreen", "true");
 	settings->setDefault("performance_tradeoffs", "true");
 
-	// Frame pacing: 30 FPS locked to vblank is smoother than an
-	// unstable 40-50.
+	// Frame pacing: 30 FPS locked to every 2nd vblank (vita_vblank_interval)
+	// is smoother than an unstable 40-50. fps_max only acts as a cap.
 	settings->setDefault("vsync", "true");
-	settings->setDefault("fps_max", "30");
+	settings->setDefault("fps_max", "60");
 	settings->setDefault("fps_max_unfocused", "10");
 
 	// Draw distance and what gets drawn. The GPU is fill-rate and
@@ -683,5 +691,17 @@ void set_default_settings()
 	settings->setDefault("mono_font_size", "14");
 	settings->setDefault("touch_controls", "auto");
 	settings->setDefault("touch_gui", "false");
+
+	// The Vita has shoulder buttons instead of analog triggers, so they dig
+	// and place; the hotbar moves to the D-pad. Triggers stay bound for
+	// controllers on a PlayStation TV.
+	settings->setDefault("keymap_dig", "MOUSE_BUTTON_1|GAMEPAD_BUTTON_10|GAMEPAD_AXIS_PLUS_5"); // LMB|R
+	settings->setDefault("keymap_place", "MOUSE_BUTTON_3|GAMEPAD_BUTTON_9|GAMEPAD_AXIS_PLUS_4"); // RMB|L
+	settings->setDefault("keymap_hotbar_next", "GAMEPAD_BUTTON_14"); // D-pad right
+	settings->setDefault("keymap_hotbar_previous", "GAMEPAD_BUTTON_13"); // D-pad left
+	settings->setDefault("keymap_freemove", "GAMEPAD_BUTTON_11"); // D-pad up
+	settings->setDefault("keymap_drop", "GAMEPAD_BUTTON_12"); // D-pad down
+	settings->setDefault("keymap_zoom", "");
+	settings->setDefault("keymap_screenshot", "");
 #endif
 }

@@ -27,6 +27,7 @@
 #endif
 
 #include <cstdio>
+#include <cmath>
 #include <cstdlib>
 #include <cassert>
 
@@ -1134,6 +1135,11 @@ bool CIrrDeviceSDL::run()
 			irrevent.GamepadButtonEvent.ID = id;
 			irrevent.GamepadButtonEvent.PressedDown = (SDL_event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
 			recentGamepadID = id;
+#ifdef __vita__
+			if (vitaPointerButton(irrevent.GamepadButtonEvent.Button,
+					irrevent.GamepadButtonEvent.PressedDown))
+				break;
+#endif
 			postEventFromUser(irrevent);
 			break;
 		}
@@ -1151,6 +1157,11 @@ bool CIrrDeviceSDL::run()
 #endif
 			irrevent.GamepadAxisEvent.ID = id;
 			recentGamepadID = id;
+#ifdef __vita__
+			if (vitaPointerAxis(irrevent.GamepadAxisEvent.Axis,
+					irrevent.GamepadAxisEvent.Value))
+				break;
+#endif
 			postEventFromUser(irrevent);
 			break;
 		}
@@ -1161,6 +1172,10 @@ bool CIrrDeviceSDL::run()
 		} // end switch
 		resetReceiveTextInputEvents();
 	} // end while
+
+#ifdef __vita__
+	vitaPointerUpdate();
+#endif
 
 	return !Close;
 }
@@ -1218,6 +1233,9 @@ float CIrrDeviceSDL::getDisplayDensity() const
 
 void CIrrDeviceSDL::SwapWindow()
 {
+#ifdef __vita__
+	vitaPointerDraw();
+#endif
 	SDL_GL_SwapWindow(Window);
 }
 
@@ -1579,5 +1597,207 @@ void CIrrDeviceSDL::CCursorControl::initCursors()
 	Cursors.emplace_back(SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE));   // ECI_SIZEWE
 	Cursors.emplace_back(nullptr);                                               // ECI_UP
 }
+
+#ifdef __vita__
+
+void CIrrDeviceSDL::postVitaMouseEvent(EMOUSE_INPUT_EVENT ev)
+{
+	SEvent irrevent{};
+	irrevent.EventType = EET_MOUSE_INPUT_EVENT;
+	irrevent.MouseInput.Event = ev;
+	irrevent.MouseInput.X = MouseX;
+	irrevent.MouseInput.Y = MouseY;
+	irrevent.MouseInput.ButtonStates = MouseButtonStates;
+	postEventFromUser(irrevent);
+}
+
+void CIrrDeviceSDL::postVitaKeyEvent(EKEY_CODE key, u32 scancode, bool down)
+{
+	SEvent irrevent{};
+	irrevent.EventType = EET_KEY_INPUT_EVENT;
+	irrevent.KeyInput.Key = key;
+	irrevent.KeyInput.SystemKeyCode = scancode;
+	irrevent.KeyInput.PressedDown = down;
+	postEventFromUser(irrevent);
+}
+
+bool CIrrDeviceSDL::vitaPointerButton(GamepadButton button, bool down)
+{
+	if (!CursorControl || !CursorControl->isVisible())
+		return false;
+
+	EMOUSE_INPUT_EVENT ev;
+	u32 mask;
+	switch (button) {
+	case GamepadButton::SOUTH: // Cross
+		ev = down ? EMIE_LMOUSE_PRESSED_DOWN : EMIE_LMOUSE_LEFT_UP;
+		mask = SDL_BUTTON_LMASK;
+		break;
+	case GamepadButton::WEST: // Square
+		ev = down ? EMIE_RMOUSE_PRESSED_DOWN : EMIE_RMOUSE_LEFT_UP;
+		mask = SDL_BUTTON_RMASK;
+		break;
+	case GamepadButton::EAST: // Circle
+		postVitaKeyEvent(KEY_ESCAPE, SDL_SCANCODE_ESCAPE, down);
+		return true;
+	case GamepadButton::DPAD_UP:
+		postVitaKeyEvent(KEY_UP, SDL_SCANCODE_UP, down);
+		return true;
+	case GamepadButton::DPAD_DOWN:
+		postVitaKeyEvent(KEY_DOWN, SDL_SCANCODE_DOWN, down);
+		return true;
+	case GamepadButton::DPAD_LEFT:
+		postVitaKeyEvent(KEY_LEFT, SDL_SCANCODE_LEFT, down);
+		return true;
+	case GamepadButton::DPAD_RIGHT:
+		postVitaKeyEvent(KEY_RIGHT, SDL_SCANCODE_RIGHT, down);
+		return true;
+	default:
+		// Start, Select, shoulders and Triangle keep their game bindings
+		return false;
+	}
+
+	VitaPointerShown = true;
+	if (down)
+		MouseButtonStates |= mask;
+	else
+		MouseButtonStates &= ~mask;
+	postVitaMouseEvent(ev);
+
+	if (ev == EMIE_LMOUSE_PRESSED_DOWN || ev == EMIE_RMOUSE_PRESSED_DOWN) {
+		u32 clicks = checkSuccessiveClicks(MouseX, MouseY, ev);
+		if (clicks == 2)
+			postVitaMouseEvent((EMOUSE_INPUT_EVENT)(EMIE_LMOUSE_DOUBLE_CLICK + ev - EMIE_LMOUSE_PRESSED_DOWN));
+		else if (clicks == 3)
+			postVitaMouseEvent((EMOUSE_INPUT_EVENT)(EMIE_LMOUSE_TRIPLE_CLICK + ev - EMIE_LMOUSE_PRESSED_DOWN));
+	}
+	return true;
+}
+
+bool CIrrDeviceSDL::vitaPointerAxis(GamepadAxis axis, s16 value)
+{
+	const int idx = static_cast<int>(axis);
+	if (idx < 0 || idx >= 4)
+		return false;
+	VitaStick[idx] = value;
+	// While a menu is open the sticks belong to the pointer
+	return CursorControl && CursorControl->isVisible();
+}
+
+void CIrrDeviceSDL::vitaPointerUpdate()
+{
+	const u32 now = os::Timer::getRealTime();
+	const f32 dtime = core::clamp<u32>(now - VitaLastUpdate, 0, 100) / 1000.0f;
+	VitaLastUpdate = now;
+
+	if (!CursorControl || !CursorControl->isVisible())
+		return;
+
+	// Quadratic response with a dead zone: precise when nudged, fast when
+	// pushed all the way.
+	const auto response = [] (s16 v) -> f32 {
+		constexpr f32 deadzone = 0.2f;
+		f32 f = v / 32767.0f;
+		f32 a = std::fabs(f);
+		if (a < deadzone)
+			return 0.0f;
+		a = (a - deadzone) / (1.0f - deadzone);
+		return std::copysign(a * a, f);
+	};
+
+	const f32 dx = response(VitaStick[static_cast<int>(GamepadAxis::LEFTX)]);
+	const f32 dy = response(VitaStick[static_cast<int>(GamepadAxis::LEFTY)]);
+	if (dx != 0.0f || dy != 0.0f) {
+		// Touch input may have moved the pointer in the meantime
+		if (!VitaPointerShown) {
+			VitaPointerX = MouseX;
+			VitaPointerY = MouseY;
+		}
+		constexpr f32 speed = 700.0f; // pixels per second at full tilt
+		VitaPointerX = core::clamp<f32>(VitaPointerX + dx * speed * dtime, 0, Width - 1);
+		VitaPointerY = core::clamp<f32>(VitaPointerY + dy * speed * dtime, 0, Height - 1);
+		s32 x = static_cast<s32>(VitaPointerX);
+		s32 y = static_cast<s32>(VitaPointerY);
+		if (x != MouseX || y != MouseY) {
+			MouseX = x;
+			MouseY = y;
+			VitaPointerShown = true;
+			postVitaMouseEvent(EMIE_MOUSE_MOVED);
+		}
+	}
+
+	// Right stick scrolls lists and formspecs
+	const f32 sy = response(VitaStick[static_cast<int>(GamepadAxis::RIGHTY)]);
+	if (sy != 0.0f) {
+		VitaScrollAccum -= sy * 12.0f * dtime; // notches per second
+		while (std::fabs(VitaScrollAccum) >= 1.0f) {
+			SEvent irrevent{};
+			irrevent.EventType = EET_MOUSE_INPUT_EVENT;
+			irrevent.MouseInput.Event = EMIE_MOUSE_WHEEL;
+			irrevent.MouseInput.Wheel = VitaScrollAccum > 0.0f ? 1.0f : -1.0f;
+			irrevent.MouseInput.X = MouseX;
+			irrevent.MouseInput.Y = MouseY;
+			irrevent.MouseInput.ButtonStates = MouseButtonStates;
+			postEventFromUser(irrevent);
+			VitaScrollAccum -= irrevent.MouseInput.Wheel;
+		}
+	} else {
+		VitaScrollAccum = 0.0f;
+	}
+}
+
+void CIrrDeviceSDL::vitaPointerDraw()
+{
+	if (!VitaPointerShown || !VideoDriver || !CursorControl ||
+			!CursorControl->isVisible())
+		return;
+
+	if (!VitaPointerTexture) {
+		// Classic arrow pointer: '#' outline, '.' fill
+		static const char *const arrow[] = {
+			"#           ",
+			"##          ",
+			"#.#         ",
+			"#..#        ",
+			"#...#       ",
+			"#....#      ",
+			"#.....#     ",
+			"#......#    ",
+			"#.......#   ",
+			"#........#  ",
+			"#.....#####",
+			"#..#..#     ",
+			"#.# #..#    ",
+			"##  #..#    ",
+			"#    #..#   ",
+			"     ####   ",
+		};
+		constexpr u32 w = 12, h = 16;
+		video::IImage *img = VideoDriver->createImage(video::ECF_A8R8G8B8,
+				core::dimension2du(w, h));
+		img->fill(video::SColor(0, 0, 0, 0));
+		for (u32 y = 0; y < h; y++) {
+			for (u32 x = 0; x < w && arrow[y][x]; x++) {
+				if (arrow[y][x] == '#')
+					img->setPixel(x, y, video::SColor(255, 0, 0, 0));
+				else if (arrow[y][x] == '.')
+					img->setPixel(x, y, video::SColor(255, 255, 255, 255));
+			}
+		}
+		VitaPointerTexture = VideoDriver->addTexture("vita_pointer", img);
+		img->drop();
+		if (!VitaPointerTexture)
+			return;
+	}
+
+	const auto size = VitaPointerTexture->getOriginalSize();
+	// Twice the size: it has to be visible on a 5" screen
+	VideoDriver->draw2DImage(VitaPointerTexture,
+			core::rect<s32>(MouseX, MouseY, MouseX + size.Width * 2, MouseY + size.Height * 2),
+			core::rect<s32>(0, 0, size.Width, size.Height),
+			nullptr, nullptr, true);
+}
+
+#endif // __vita__
 
 #endif // _IRR_COMPILE_WITH_SDL_DEVICE_

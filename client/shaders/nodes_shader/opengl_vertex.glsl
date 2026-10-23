@@ -151,6 +151,9 @@ void main(void)
 #ifdef USE_ARRAY_TEXTURE
 	varTexLayer = inVertexAux;
 #endif
+#ifdef USE_ATLAS_TEXTURE
+	varAtlasCell = atlasCell(inVertexAux);
+#endif
 	varTexCoord = inTexCoord0.st;
 
 	vec4 wpos = mWorld * inVertexPosition;

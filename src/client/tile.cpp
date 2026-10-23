@@ -4,6 +4,7 @@
 
 #include "tile.h"
 #include <cassert>
+#include "util/string.h"
 
 video::ITexture *AnimationInfo::getTexture(float animation_time) const
 {
@@ -16,6 +17,16 @@ video::ITexture *AnimationInfo::getTexture(float animation_time) const
 
 	assert(frame < m_frames->size());
 	return (*m_frames)[frame].texture;
+}
+
+bool isArrayTexture(const video::ITexture *texture)
+{
+	if (!texture)
+		return false;
+	if (texture->getType() == video::ETT_2D_ARRAY)
+		return true;
+	return str_starts_with(std::string_view(texture->getName().getPath().c_str()),
+		std::string_view(TEXTURE_ATLAS_PREFIX));
 }
 
 void AnimationInfo::updateTexture(video::SMaterial &material, float animation_time)

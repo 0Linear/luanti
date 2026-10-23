@@ -163,7 +163,7 @@ static void fillTileAttribs(TileLayer *layer, TileAttribContext context,
 
 	// Decide on shader to use
 	if (layer->texture) {
-		layer->shader_id = get_shader(layer->texture->getType() == video::ETT_2D_ARRAY);
+		layer->shader_id = get_shader(isArrayTexture(layer->texture));
 	}
 }
 
@@ -182,10 +182,39 @@ static bool isWorldAligned(AlignStyle style, WorldAlignMode mode, NodeDrawType d
 	return false;
 }
 
+/// @return whether array textures get emulated with atlases
+static bool useAtlasArrays()
+{
+	auto *driver = RenderingEngine::get_video_driver();
+	// Only implemented for OpenGL ES 2, which lacks real array textures
+	if (driver->getDriverType() != video::EDT_OGLES2 ||
+			driver->queryFeature(video::EVDF_TEXTURE_2D_ARRAY))
+		return false;
+	if (!g_settings->getBool("emulate_array_textures"))
+		return false;
+	// Any kind of filtering would sample from neighboring atlas cells
+	return !g_settings->getBool("mip_map") &&
+		!g_settings->getBool("bilinear_filter") &&
+		!g_settings->getBool("trilinear_filter") &&
+		!g_settings->getBool("anisotropic_filter");
+}
+
+/// @return whether textures of this size can be put into an atlas
+static bool atlasFits(v2u32 dim)
+{
+	// Keep atlases at most 1024x1024 (4 MiB): fine for the usual 16-64 px
+	// node textures, high resolution packs use regular textures.
+	const u32 max = std::min<u32>(1024,
+		RenderingEngine::get_video_driver()->getMaxTextureSize().Width);
+	return dim.X * TEXTURE_ATLAS_GRID <= max && dim.Y * TEXTURE_ATLAS_GRID <= max;
+}
+
 /// @return maximum number of layers in array textures we can use (0 if unsupported)
 static size_t getArrayTextureMax(IShaderSource *shdsrc)
 {
 	auto *driver = RenderingEngine::get_video_driver();
+	if (useAtlasArrays())
+		return TEXTURE_ATLAS_GRID * TEXTURE_ATLAS_GRID;
 	// needs to support creating array textures
 	if (!driver->queryFeature(video::EVDF_TEXTURE_2D_ARRAY))
 		return 0;
@@ -537,6 +566,7 @@ void NodeVisuals::fillNodeVisuals(NodeDefManager *ndef, Client *client, void *pr
 
 	/* texture pre-loading stage */
 	const size_t arraymax = getArrayTextureMax(shdsrc);
+	const bool atlas = useAtlasArrays();
 	// Group by size
 	std::unordered_map<v2u32, std::vector<std::string_view>> sizes;
 	if (arraymax > 1) {
@@ -547,6 +577,8 @@ void NodeVisuals::fillNodeVisuals(NodeDefManager *ndef, Client *client, void *pr
 			client->showUpdateProgressTexture(progress_callback_args,
 				0.33333f * ++i / pool.size());
 			if (!dim.Width || !dim.Height) // error
+				continue;
+			if (atlas && !atlasFits(v2u32(dim)))
 				continue;
 			sizes[v2u32(dim)].emplace_back(image);
 		}

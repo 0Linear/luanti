@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "porting.h"
+
 #include <vector>
 #include <memory>
 #include <string>
@@ -136,6 +138,10 @@ public:
 
 	bool run()
 	{
+#ifdef __vita__
+		// Called once per frame by every main loop
+		porting::vita::keepAwake();
+#endif
 		return m_device->run();
 	}
 

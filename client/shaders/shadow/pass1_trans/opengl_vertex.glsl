@@ -52,6 +52,9 @@ void main()
 #ifdef USE_ARRAY_TEXTURE
 	varTexLayer = inVertexAux;
 #endif
+#ifdef USE_ATLAS_TEXTURE
+	varAtlasCell = atlasCell(inVertexAux);
+#endif
 
 #ifdef COLORED_SHADOWS
 	varColor = inVertexColor.rgb;

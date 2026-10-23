@@ -670,7 +670,7 @@ namespace {
 
 static bool use_debugger(int argc, char *argv[])
 {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(__vita__)
 	return false;
 #else
 #ifdef _WIN32

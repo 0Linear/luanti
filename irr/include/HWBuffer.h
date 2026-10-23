@@ -35,6 +35,22 @@ struct HWBuffer : public virtual IReferenceCounted {
 	//! link back to driver specific buffer info
 	mutable void *Link = nullptr;
 
+	/// If set, the driver frees the CPU-side copy of the data once it has
+	/// been uploaded to a hardware buffer. Saves memory for static geometry
+	/// that is only ever drawn. Afterwards the buffer is immutable: getCount()
+	/// still works, but getData() returns nullptr.
+	bool ReleaseDataAfterUpload = false;
+
+	/// @return whether the CPU-side data has been released
+	bool isDataReleased() const { return DataReleased; }
+
+	/// Frees the CPU-side data but remembers the element count.
+	/// Only to be called by the driver after a successful upload.
+	virtual void releaseData() {}
+
+protected:
+	bool DataReleased = false;
+
 private:
 
 	u32 ChangedID = 1;

@@ -206,8 +206,14 @@ RenderingEngine::RenderingEngine(MyEventReceiver *receiver)
 			+ "shaders" + DIR_DELIM + "Irrlicht";
 	params.OGLES2ShaderPath = (porting::path_share + DIR_DELIM + rel_path + DIR_DELIM).c_str();
 
+#ifdef __vita__
+	porting::vita::preVideoInit();
+#endif
 	m_device = createDevice(params, driverType);
 	driver = m_device->getVideoDriver();
+#ifdef __vita__
+	porting::vita::postVideoInit();
+#endif
 	verbosestream << "Using the " << getVideoDriverName(driver->getDriverType()) << " video driver" << std::endl;
 
 	// This changes the minimum allowed number of vertices in a VBO. Default is 500.

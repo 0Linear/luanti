@@ -11,6 +11,7 @@
 #include "server/player_sao.h"
 #include "filesys.h"
 #include "porting.h"
+#include "settings.h"
 #include "server.h"
 #if CHECK_CLIENT_BUILD()
 #include "client/client.h"
@@ -132,6 +133,12 @@ ScriptApiBase::ScriptApiBase(ScriptingType type):
 	lua_pushlightuserdata(m_luastack, (void*) script_exception_wrapper);
 	luaJIT_setmode(m_luastack, -1, LUAJIT_MODE_WRAPCFUNC | LUAJIT_MODE_ON);
 	lua_pop(m_luastack, 1);
+#ifdef __vita__
+	// The JIT compiler on the Vita depends on the homebrew being allowed to
+	// map executable memory. Allow falling back to the interpreter.
+	if (!g_settings->getBool("vita_luajit_jit"))
+		luaJIT_setmode(m_luastack, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_OFF);
+#endif
 #else
 	// (This is a custom API from the bundled Lua.)
 	lua_atccall(m_luastack, script_exception_wrapper);

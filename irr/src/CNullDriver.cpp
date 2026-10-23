@@ -990,7 +990,10 @@ void CNullDriver::expireHardwareBuffers()
 	for (size_t i = 0; i < HWBufferList.size(); ) {
 		auto *link = HWBufferList[i];
 
-		bool del = link->UnusedCounter++ >= DELETE_AFTER_UNUSED_FRAMES ||
+		// Buffers without CPU-side data can't be re-uploaded later, so
+		// they are kept until their owner goes away.
+		const bool can_expire = link->Buffer && !link->Buffer->isDataReleased();
+		bool del = (can_expire && link->UnusedCounter++ >= DELETE_AFTER_UNUSED_FRAMES) ||
 			!link->Buffer || link->Buffer->getReferenceCount() == 1;
 
 		// deleting can reorder, so don't advance in list

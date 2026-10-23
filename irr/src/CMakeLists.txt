@@ -15,7 +15,9 @@ option(USE_SDL3_STATIC "Link with SDL3 static libraries" FALSE)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_compile_definitions(_DEBUG)
 endif()
-set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+if(NOT VITA) # Vita executables can't contain GOT-relative relocations
+	set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang|AppleClang)$")
 	# don't set CMAKE_CXX_FLAGS_* here, it would override what Luanti already sets

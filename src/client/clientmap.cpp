@@ -920,8 +920,14 @@ static u32 transformBuffersToDrawOrder(
 	// check if we can even merge anything
 	u32 can_merge = 0;
 	u32 total_vtx = 0, total_idx = 0;
+	// Buffers whose data only lives on the GPU can't be merged
+	const auto mergeable = [&] (const scene::IMeshBuffer *buf) {
+		return buf->getVertexCount() < target_min_vertices &&
+			!buf->getVertexBuffer()->isDataReleased() &&
+			!buf->getIndexBuffer()->isDataReleased();
+	};
 	for (auto &pair : src) {
-		if (pair.second->getVertexCount() < target_min_vertices) {
+		if (mergeable(pair.second)) {
 			can_merge++;
 			total_vtx += pair.second->getVertexCount();
 			total_idx += pair.second->getIndexCount();
@@ -933,7 +939,7 @@ static u32 transformBuffersToDrawOrder(
 	for (auto it = src.rbegin(); it != src.rend(); ++it) {
 		v3f translate = get_world_pos(it->first);
 		auto *buf = it->second;
-		if (can_merge < 2 || buf->getVertexCount() >= target_min_vertices) {
+		if (can_merge < 2 || !mergeable(buf)) {
 			draw_order.emplace_back(translate, buf);
 			continue;
 		}
@@ -1170,7 +1176,7 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 
 			driver->setMaterial(material);
 			++material_swaps;
-			if (auto *tex = material.getTexture(0); tex && tex->getType() == video::ETT_2D_ARRAY)
+			if (isArrayTexture(material.getTexture(0)))
 				++array_texture_use;
 
 			material.TextureLayers[ShadowRenderer::TEXTURE_LAYER_SHADOW].Texture = nullptr;

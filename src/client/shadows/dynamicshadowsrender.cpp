@@ -11,6 +11,7 @@
 #include "settings.h"
 #include "util/string.h"
 #include "client/shader.h"
+#include "client/tile.h"
 #include "client/client.h"
 #include "client/clientmap.h"
 #include "IGPUProgrammingServices.h"
@@ -466,7 +467,7 @@ void ShadowRenderer::renderShadowMap(video::ITexture *target,
 		 * Array texture support was tacked on but this should really be rewritten:
 		 * The shadow map code should be part of nodes_shader and activated on demand.
 		 */
-		bool array_tex = mat.getTexture(0) && mat.getTexture(0)->getType() == video::ETT_2D_ARRAY;
+		bool array_tex = isArrayTexture(mat.getTexture(0));
 		if (m_shadow_map_colored && is_transparent_pass) {
 			mat.MaterialType = array_tex ? depth_shader_trans_a : depth_shader_trans;
 		} else {

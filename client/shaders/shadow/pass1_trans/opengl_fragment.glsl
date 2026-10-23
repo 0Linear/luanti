@@ -29,6 +29,8 @@ void main()
 {
 #ifdef USE_ARRAY_TEXTURE
 	vec4 base = texture(baseTexture, vec3(varTexCoord, float(varTexLayer))).rgba;
+#elif defined(USE_ATLAS_TEXTURE)
+	vec4 base = texture2D(baseTexture, atlasUV(varTexCoord)).rgba;
 #else
 	vec4 base = texture2D(baseTexture, varTexCoord).rgba;
 #endif

@@ -3,9 +3,11 @@
 
 #include "porting_vita.h"
 #include "porting.h"
+#include "config.h"
 #include "filesys.h"
 #include "log.h"
 #include "settings.h"
+#include "util/numeric.h"
 #include "util/string.h"
 
 #include <psp2/apputil.h>
@@ -22,6 +24,7 @@
 #include <psp2/sysmodule.h>
 #include <psp2/system_param.h>
 #include <vitaGL.h>
+#include <SDL2/SDL_messagebox.h>
 
 #include <malloc.h>
 #include <cstdlib>
@@ -143,8 +146,33 @@ void init()
 	sceIoMkdir(USER_DIR, 0777);
 }
 
+static bool haveShaderCompiler()
+{
+	// vitaShaRK looks in these places for the system's Cg compiler module,
+	// which every user has to extract from their own firmware.
+	return fs::PathExists("ur0:data/libshacccg.suprx") ||
+		fs::PathExists("ur0:data/external/libshacccg.suprx");
+}
+
+[[noreturn]] static void fatalNoShaderCompiler()
+{
+	// The message box is drawn through vitaGL, so bring it up first.
+	vglInitExtended(0, 960, 544, 12 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, PROJECT_NAME_C,
+		"The shader compiler (libshacccg.suprx) is missing.\n\n"
+		"Luanti needs it to render anything. Extract it from your firmware "
+		"with ShaRKBR33D and restart.", nullptr);
+	sceKernelExitProcess(0);
+	std::abort();
+}
+
 void preVideoInit()
 {
+	if (!haveShaderCompiler()) {
+		errorstream << "libshacccg.suprx not found" << std::endl;
+		fatalNoShaderCompiler();
+	}
+
 	setClocks(g_settings->getBool("vita_overclock"));
 
 	// Shader compiler: Luanti generates many shader variants, so prefer
@@ -171,6 +199,17 @@ void preVideoInit()
 	// vitaGL's garbage collector frees GPU resources once the GPU is done
 	// with them. Keep it off the render core.
 	vglSetupGarbageCollector(0x10000100 + 10, SCE_KERNEL_CPU_MASK_USER_2);
+}
+
+void postVideoInit()
+{
+	// Pace frames with the display instead of the FPS limiter: waiting for
+	// N vblanks per frame (60/N FPS) gives perfectly even frame times,
+	// while sleeping to hit 30 FPS on a 60 Hz display judders.
+	if (g_settings->getBool("vsync")) {
+		u32 interval = rangelim(g_settings->getU32("vita_vblank_interval"), 1, 4);
+		eglSwapInterval(0, interval);
+	}
 }
 
 void onThreadStart(const std::string &name)

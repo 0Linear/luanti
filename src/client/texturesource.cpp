@@ -14,6 +14,7 @@
 #include "settings.h"
 #include "texturepaths.h"
 #include "util/thread.h"
+#include "tile.h"
 
 // Represents a to-be-generated texture for queuing purposes
 struct TextureRequest
@@ -153,6 +154,10 @@ private:
 
 	// Generate array texture
 	u32 generateArrayTexture(const std::vector<std::string> &names);
+	// Helper for the above: builds an atlas when array textures are unsupported
+	u32 generateAtlasTexture(const std::vector<std::string> &names,
+		const std::vector<video::IImage*> &imgs,
+		std::set<std::string> &&source_image_names);
 
 	// Thread-safe cache of what source images are known (true = known)
 	MutexedMap<std::string, bool> m_source_image_existence;
@@ -350,7 +355,12 @@ u32 TextureSource::generateArrayTexture(const std::vector<std::string> &images)
 
 	video::IVideoDriver *driver = RenderingEngine::get_video_driver();
 	sanity_check(driver);
-	assert(driver->queryFeature(video::EVDF_TEXTURE_2D_ARRAY));
+
+	if (!driver->queryFeature(video::EVDF_TEXTURE_2D_ARRAY)) {
+		u32 id = generateAtlasTexture(images, imgs, std::move(source_image_names));
+		drop_imgs();
+		return id;
+	}
 
 	MutexAutoLock lock(m_textureinfo_cache_mutex);
 	const u32 id = m_textureinfo_cache.size();
@@ -374,6 +384,52 @@ u32 TextureSource::generateArrayTexture(const std::vector<std::string> &images)
 	// Add texture to caches (add NULL textures too)
 
 	TextureInfo ti{video::ETT_2D_ARRAY, name, images, tex, std::move(source_image_names)};
+	m_textureinfo_cache.emplace_back(std::move(ti));
+	m_name_to_id[name] = id;
+
+	return id;
+}
+
+u32 TextureSource::generateAtlasTexture(const std::vector<std::string> &images,
+	const std::vector<video::IImage*> &imgs, std::set<std::string> &&source_image_names)
+{
+	/*
+		Emulate an array texture with a grid of equally sized cells, so that
+		all those textures share one material and get merged into the same
+		mesh buffers (= far fewer draw calls). The shaders turn the layer
+		index into a cell (see ShaderSource::generateShader).
+		This only works without mipmaps and filtering, which would bleed
+		between cells; node_visuals.cpp makes sure of that.
+	*/
+	constexpr u32 grid = TEXTURE_ATLAS_GRID;
+	sanity_check(imgs.size() <= grid * grid);
+
+	video::IVideoDriver *driver = RenderingEngine::get_video_driver();
+	const core::dimension2du cell = imgs[0]->getDimension();
+	video::IImage *atlas = driver->createImage(video::ECF_A8R8G8B8,
+		core::dimension2du(cell.Width * grid, cell.Height * grid));
+	atlas->fill(video::SColor(0, 0, 0, 0));
+	for (u32 i = 0; i < imgs.size(); i++) {
+		assert(imgs[i]->getDimension() == cell);
+		imgs[i]->copyTo(atlas, core::position2di(
+			(i % grid) * cell.Width, (i / grid) * cell.Height));
+	}
+
+	MutexAutoLock lock(m_textureinfo_cache_mutex);
+	const u32 id = m_textureinfo_cache.size();
+	char buf[64];
+	porting::mt_snprintf(buf, sizeof(buf), TEXTURE_ATLAS_PREFIX "%u %ux%ux%zu",
+		id, cell.Width, cell.Height, imgs.size());
+	std::string name = buf;
+
+	video::ITexture *tex = driver->addTexture(name.c_str(), atlas);
+	atlas->drop();
+	if (!tex) {
+		warningstream << "generateAtlasTexture(): failed to upload texture \""
+				<< name << "\"" << std::endl;
+	}
+
+	TextureInfo ti{video::ETT_2D, name, images, tex, std::move(source_image_names)};
 	m_textureinfo_cache.emplace_back(std::move(ti));
 	m_name_to_id[name] = id;
 

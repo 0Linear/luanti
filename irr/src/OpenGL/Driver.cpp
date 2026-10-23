@@ -535,9 +535,17 @@ bool COpenGL3DriverBase::updateHardwareBuffer(SHWBufferLink *HWBuffer)
 	b->UnusedCounter = 0;
 	assert(b->Buffer);
 	if (b->ChangedID != b->Buffer->getChangedID() || !b->Vbo.exists()) {
+		// Nothing left to upload from
+		if (b->Buffer->isDataReleased())
+			return b->Vbo.exists();
 		if (!_updateHardwareBuffer(b))
 			return false;
 		b->ChangedID = b->Buffer->getChangedID();
+		if (b->Buffer->ReleaseDataAfterUpload &&
+				b->Buffer->MappingHint == scene::EHM_STATIC) {
+			// The data now lives in GPU memory, drop our copy
+			const_cast<scene::HWBuffer *>(b->Buffer)->releaseData();
+		}
 	}
 
 	return true;
@@ -1046,13 +1054,15 @@ void COpenGL3DriverBase::drawGeneric(const void *vertices, const void *indexList
 void COpenGL3DriverBase::beginDraw(const VertexType &vertexType, uintptr_t verticesBase)
 {
 	for (auto &attr : vertexType) {
-		if (attr.mode == VertexAttribute::Mode::Integer && Version.Major < 3) {
-			// assume we know what we're doing and just skip if not supported
-			continue;
+		auto mode = attr.mode;
+		if (mode == VertexAttribute::Mode::Integer && Version.Major < 3) {
+			// No integer attributes before GLSL ES 3.00: pass them as floats.
+			// Shaders that do not declare the attribute just ignore it.
+			mode = VertexAttribute::Mode::Regular;
 		}
 
 		GL.EnableVertexAttribArray(attr.Index);
-		switch (attr.mode) {
+		switch (mode) {
 		case VertexAttribute::Mode::Regular:
 			GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_FALSE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
 			break;

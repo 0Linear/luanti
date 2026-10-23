@@ -39,7 +39,14 @@ struct CVertexBuffer final : public IVertexBuffer
 
 	u32 getCount() const override
 	{
-		return static_cast<u32>(Data.size());
+		return DataReleased ? ReleasedCount : static_cast<u32>(Data.size());
+	}
+
+	void releaseData() override
+	{
+		ReleasedCount = static_cast<u32>(Data.size());
+		std::vector<T>().swap(Data);
+		DataReleased = true;
 	}
 
 	video::E_VERTEX_TYPE getType() const override
@@ -98,6 +105,11 @@ struct CVertexBuffer final : public IVertexBuffer
 
 	//! Vertices of this buffer
 	std::vector<T> Data;
+
+private:
+	u32 ReleasedCount = 0;
+
+public:
 
 	//! Optional weights for skinning
 	irr_ptr<WeightBuffer> Weights;

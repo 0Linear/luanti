@@ -92,6 +92,8 @@ MeshUpdateQueue::MeshUpdateQueue(Client *client):
 	assert(m_client);
 	m_cache_smooth_lighting = g_settings->getBool("smooth_lighting");
 	m_cache_enable_water_reflections = g_settings->getBool("enable_water_reflections");
+	m_cache_free_static_mesh_data = g_settings->getBool("free_static_mesh_data");
+	m_cache_mesh_buffer_min_vertices = g_settings->getU32("mesh_buffer_min_vertices");
 	m_cache_enable_waving_water = g_settings->getBool("enable_waving_water");
 }
 
@@ -285,6 +287,8 @@ void MeshUpdateQueue::fillDataFromMapBlocks(QueuedMeshUpdate *q)
 	data->m_generate_minimap = !!m_client->getMinimap();
 	data->m_smooth_lighting = m_cache_smooth_lighting;
 	data->m_enable_water_reflections = m_cache_enable_water_reflections;
+	data->m_free_static_mesh_data = m_cache_free_static_mesh_data;
+	data->m_mesh_buffer_min_vertices = m_cache_mesh_buffer_min_vertices;
 	data->m_enable_waving_water = m_cache_enable_waving_water;
 }
 

@@ -676,6 +676,9 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 		<< std::showpoint // for GLSL ES
 		;
 	std::string vertex_header, fragment_header, geometry_header;
+	// Array texture requested, but the driver can't do them: we got an atlas
+	const bool atlas_texture = input_const.count("USE_ARRAY_TEXTURE") > 0 &&
+		!supportsSampler2DArray();
 	if (m_fully_programmable) {
 		const bool use_glsl3 = m_have_glsl3;
 		const bool use_glsl15 = driver->getDriverType() == video::EDT_OPENGL3;
@@ -744,6 +747,16 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 		// Our vertex color has components reversed compared to what OpenGL
 		// normally expects, so we need to take that into account.
 		vertex_header += "#define inVertexColor (inVertexColor_raw.bgra)\n";
+		if (atlas_texture) {
+			// Array textures emulated with an atlas, see
+			// TextureSource::generateArrayTexture(). The layer index arrives
+			// as a float since GLSL ES 1.00 has no integer attributes.
+			vertex_header += "ATTRIBUTE_(3) mediump float inVertexAux;\n"
+				"VARYING_ highp vec2 varAtlasCell;\n"
+				"vec2 atlasCell(float layer) {\n"
+				"	return vec2(mod(layer, ATLAS_GRID), floor(layer / ATLAS_GRID));\n"
+				"}\n";
+		}
 
 		fragment_header = "";
 		if (use_glsl3) {
@@ -754,6 +767,14 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 			fragment_header += "#define VARYING_ in\n";
 		} else {
 			fragment_header += "#define VARYING_ varying\n";
+		}
+		if (atlas_texture) {
+			// fract() gives GL_REPEAT behavior within the atlas cell, so
+			// merged faces with texture coordinates > 1 still tile.
+			fragment_header += "VARYING_ vec2 varAtlasCell;\n"
+				"vec2 atlasUV(vec2 uv) {\n"
+				"	return (floor(varAtlasCell + 0.5) + fract(uv)) * (1.0 / ATLAS_GRID);\n"
+				"}\n";
 		}
 	} else {
 		/* legacy OpenGL driver */
@@ -800,6 +821,12 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 	}
 
 	ShaderConstants constants = input_const;
+
+	if (atlas_texture) {
+		constants.erase("USE_ARRAY_TEXTURE");
+		constants["USE_ATLAS_TEXTURE"] = 1;
+		constants["ATLAS_GRID"] = (float)TEXTURE_ATLAS_GRID;
+	}
 
 	{
 		if (shaderinfo.base_material == video::EMT_TRANSPARENT_ALPHA_CHANNEL)

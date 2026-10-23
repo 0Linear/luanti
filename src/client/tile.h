@@ -9,6 +9,20 @@
 #include <vector>
 #include <SMaterial.h>
 
+/**
+ * Drivers without array textures (OpenGL ES 2) can get them emulated with a
+ * texture atlas of TEXTURE_ATLAS_GRID x TEXTURE_ATLAS_GRID equally sized
+ * cells; layer i lives in cell (i % GRID, i / GRID).
+ * @see TextureSource::generateArrayTexture
+ */
+constexpr u32 TEXTURE_ATLAS_GRID = 16;
+
+/// Name prefix of atlases that emulate array textures
+#define TEXTURE_ATLAS_PREFIX "atlas#"
+
+/// @return whether the texture is an array texture (or an emulation of one)
+bool isArrayTexture(const video::ITexture *texture);
+
 enum MaterialType : u8 {
 	TILE_MATERIAL_BASIC,
 	TILE_MATERIAL_ALPHA,

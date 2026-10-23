@@ -120,6 +120,9 @@ void main(void)
 #ifdef USE_ARRAY_TEXTURE
 	varTexLayer = inVertexAux;
 #endif
+#ifdef USE_ATLAS_TEXTURE
+	varAtlasCell = atlasCell(inVertexAux);
+#endif
 	varTexCoord = (mTexture * vec4(inTexCoord0.xy, 1.0, 1.0)).st;
 
 	gl_Position = mWorldViewProj * skinPos;
