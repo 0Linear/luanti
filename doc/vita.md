@@ -104,6 +104,18 @@ graphics settings:
   viewing range).
 * `vita_overclock`: disable to save battery.
 
+## Downloads
+
+The `vita` GitHub Actions workflow (`.github/workflows/vita.yml`) builds the
+VPK on every relevant push:
+
+* **Development builds**: open the workflow run on the *Actions* tab and
+  download the `luanti-vita` artifact (a zip containing `luanti-vita.vpk`).
+* **Releases**: pushing a tag named `v*` or `vita-*` (for example
+  `git tag vita-0.1 && git push origin vita-0.1`), or running the workflow
+  manually with a release tag, publishes a GitHub release with the VPK
+  attached.
+
 ## Building
 
 The easiest way is the VitaSDK Docker image, which has every dependency:
