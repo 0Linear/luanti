@@ -30,6 +30,7 @@ struct QueuedMeshUpdate
 	std::vector<MapBlock*> map_blocks;
 	u16 epoch = U16_MAX;
 	bool urgent = false;
+	u8 lod = 0;
 
 	QueuedMeshUpdate() = default;
 	~QueuedMeshUpdate();
@@ -100,6 +101,16 @@ public:
 		return m_queue.size();
 	}
 
+	/// Position (in nodes) that decides the level of detail of meshes
+	void setLodCenter(v3f pos)
+	{
+		MutexAutoLock lock(m_mutex);
+		m_lod_center = pos;
+	}
+
+	/// mesh_lod_distance in nodes, 0 = disabled
+	f32 getLodDistance() const { return m_lod_distance; }
+
 	/// @param finish if true, also clears updates that need to be acked to the server
 	void clear(bool finish);
 
@@ -117,6 +128,9 @@ private:
 	bool m_cache_free_static_mesh_data;
 	u32 m_cache_mesh_buffer_min_vertices;
 	bool m_cache_enable_waving_water;
+	bool m_cache_greedy_meshing;
+	f32 m_lod_distance = 0.0f;
+	v3f m_lod_center;
 
 	void fillDataFromMapBlocks(QueuedMeshUpdate *q);
 };
@@ -126,6 +140,7 @@ struct MeshUpdateResult
 	v3s16 p = v3s16(-1338, -1338, -1338);
 	std::unique_ptr<MapBlockMesh> mesh;
 	u8 solid_sides;
+	u16 side_connections = 0x7FFF;
 	std::vector<v3s16> ack_list;
 	std::vector<MapBlock*> map_blocks;
 	u16 epoch = U16_MAX;
@@ -170,6 +185,9 @@ public:
 			bool update_neighbors = false);
 
 	void putResult(MeshUpdateResult &&r);
+
+	void setLodCenter(v3f pos) { m_queue_in.setLodCenter(pos); }
+	f32 getLodDistance() const { return m_queue_in.getLodDistance(); }
 
 	/// @note caller needs to refDrop() the affected map_blocks
 	bool getNextResult(MeshUpdateResult &r);

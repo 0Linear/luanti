@@ -95,6 +95,8 @@ MeshUpdateQueue::MeshUpdateQueue(Client *client):
 	m_cache_free_static_mesh_data = g_settings->getBool("free_static_mesh_data");
 	m_cache_mesh_buffer_min_vertices = g_settings->getU32("mesh_buffer_min_vertices");
 	m_cache_enable_waving_water = g_settings->getBool("enable_waving_water");
+	m_cache_greedy_meshing = g_settings->getBool("greedy_meshing");
+	m_lod_distance = std::max<f32>(0, g_settings->getU16("mesh_lod_distance"));
 }
 
 MeshUpdateQueue::~MeshUpdateQueue()
@@ -231,6 +233,16 @@ QueuedMeshUpdate *MeshUpdateQueue::pop()
 		// epoch counts at this point.
 		if (result)
 			result->epoch = m_epoch;
+
+		// Level of detail, by the distance of the mesh center. Halfway into
+		// the hysteresis band, see ClientMap::updateMeshLods()
+		if (result && m_lod_distance > 0) {
+			const u16 side = m_client->getMeshGrid().cell_size * MAP_BLOCKSIZE;
+			const v3f center = intToFloat(result->p * MAP_BLOCKSIZE, 1.0f) +
+					v3f(side * 0.5f - 0.5f);
+			result->lod = center.getDistanceFrom(m_lod_center) >
+					m_lod_distance + MESH_LOD_HYSTERESIS * 0.5f;
+		}
 	}
 
 	if (result)
@@ -290,6 +302,12 @@ void MeshUpdateQueue::fillDataFromMapBlocks(QueuedMeshUpdate *q)
 	data->m_free_static_mesh_data = m_cache_free_static_mesh_data;
 	data->m_mesh_buffer_min_vertices = m_cache_mesh_buffer_min_vertices;
 	data->m_enable_waving_water = m_cache_enable_waving_water;
+	data->m_greedy_meshing = m_cache_greedy_meshing;
+	data->m_lod = q->lod;
+	// Lighting differences are hard to see far away, while flat lighting
+	// lets greedy meshing merge a lot more faces
+	if (q->lod)
+		data->m_smooth_lighting = false;
 }
 
 /*
@@ -329,6 +347,7 @@ void MeshUpdateWorkerThread::doUpdate()
 		r.p = q->p;
 		r.mesh = std::unique_ptr<MapBlockMesh>(mesh_new);
 		r.solid_sides = get_solid_sides(q->data);
+		r.side_connections = get_side_connections(q->data);
 		r.ack_list = std::move(q->ack_list);
 		r.map_blocks = std::move(q->map_blocks);
 		r.epoch = q->epoch;

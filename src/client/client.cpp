@@ -648,6 +648,7 @@ void Client::step(float dtime)
 				delete block->mesh;
 				block->mesh = nullptr;
 				block->solid_sides = r.solid_sides;
+				block->side_connections = r.side_connections;
 
 				if (r.mesh) {
 					minimap_mapblocks = r.mesh->moveMinimapMapblocks();
@@ -1828,6 +1829,16 @@ void Client::addUpdateMeshTask(v3s16 p, bool ack_to_server, bool urgent)
 		return;
 
 	m_mesh_update_manager->updateBlock(&m_env.getMap(), p, ack_to_server, urgent);
+}
+
+void Client::setMeshLodCenter(v3f pos_nodes)
+{
+	m_mesh_update_manager->setLodCenter(pos_nodes);
+}
+
+f32 Client::getMeshLodDistance() const
+{
+	return m_mesh_update_manager->getLodDistance();
 }
 
 void Client::addUpdateMeshTaskWithEdge(v3s16 blockpos, bool ack_to_server, bool urgent)

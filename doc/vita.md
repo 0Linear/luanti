@@ -73,12 +73,30 @@ Text fields open the system keyboard.
 The Vita has three usable 444 MHz Cortex-A9 cores, about 365 MiB of memory
 for applications and a tile-based PowerVR SGX543MP4+. Singleplayer runs the
 server inside the same process, so map generation, mods and rendering share
-those cores. The defaults aim for a stable 30 FPS:
+those cores. The defaults aim for 60 FPS:
 
-* **30 FPS locked to the display** (`vsync`, `vita_vblank_interval = 2`),
-  which feels smoother than a framerate jumping between 30 and 60.
+* **Up to 60 FPS with VSync and triple buffering**
+  (`vita_vblank_interval = 1`). Set it to 2 for a locked 30 FPS.
+* **3D world rendered at 75 % resolution** (`render_scale = 0.75`, 720x408)
+  and scaled up; menus, HUD and text stay at full resolution.
+* **Greedy meshing** (`greedy_meshing`): faces of solid nodes that look the
+  same (same texture, same light) are merged into large rectangles, which
+  saves 35-40 % of the vertices of hilly terrain and much more on flat
+  ground and walls.
+* **Cave culling** (`cave_culling`, after Tommaso Checchi's "advanced cave
+  culling"): for every map chunk the mesh generator records which sides are
+  connected through air, and the visibility search only continues through
+  sides that can actually be seen through. Caves and mountain insides
+  behind solid rock are not drawn.
+* **Level of detail** (`mesh_lod_distance = 32`): map chunks further away
+  are meshed with flat lighting (so greedy meshing merges more) and without
+  small decorations like grass, flowers, torches and rails.
+* **Separable noise interpolation**: the noise maps of map generation are
+  interpolated one axis at a time, about 3x faster for 3D noise.
 * **Viewing range 48**, small map caches on client and server, one emerge
   and one mesh generation thread.
+* **Lighter server**: game logic runs at about 8 steps per second, ABMs every
+  2 seconds and node timers every 0.4 seconds, with smaller time budgets.
 * **No post processing, shadows, bloom, 3D clouds or waving**.
 * **Opaque leaves and liquids**: alpha tested and blended geometry defeats
   the hidden surface removal of the PowerVR tile renderer.
@@ -90,18 +108,19 @@ those cores. The defaults aim for a stable 30 FPS:
 * **GPU-only map meshes** (`free_static_mesh_data`): the CPU copy of a
   mapblock mesh is freed once it has been uploaded, nearly halving the memory
   used by map geometry.
+* **Per-vertex fog** (`vertex_fog`).
 * **LuaJIT with its JIT compiler** (`vita_luajit_jit`), for mods and Lua
   map generators.
 
-Things worth trying in *Settings → Advanced → PlayStation Vita* and the
-graphics settings:
+Things worth trying in *Settings → Advanced* and the graphics settings:
 
 * `viewing_range`: the biggest single factor. 32 is very smooth, 64+ is
   heavy.
-* `smooth_lighting`: turning it off speeds up mesh generation and produces
-  fewer vertices.
-* `vita_vblank_interval = 1` targets 60 FPS (only realistic with a small
-  viewing range).
+* `render_scale`: 1.0 for a sharper picture, 0.5 if the GPU is the limit.
+  If the world stays black while the HUD shows, set it to 1.0 and report it.
+* `smooth_lighting`: turning it off speeds up mesh generation and lets
+  greedy meshing merge more faces.
+* `mesh_lod_distance`: lower values draw more of the world with less detail.
 * `vita_overclock`: disable to save battery.
 
 ## Downloads

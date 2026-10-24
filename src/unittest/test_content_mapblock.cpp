@@ -154,6 +154,8 @@ public:
 	void testSurroundedNode();
 	void testInterliquidSame();
 	void testInterliquidDifferent();
+	void testGreedyMeshing();
+	void testSideConnections();
 };
 
 static TestMapblockMeshGenerator g_test_instance;
@@ -165,6 +167,8 @@ void TestMapblockMeshGenerator::runTests(IGameDef *gamedef)
 	TEST(testSurroundedNode);
 	TEST(testInterliquidSame);
 	TEST(testInterliquidDifferent);
+	TEST(testGreedyMeshing);
+	TEST(testSideConnections);
 }
 
 namespace quad {
@@ -262,4 +266,102 @@ void TestMapblockMeshGenerator::testInterliquidDifferent()
 	UASSERT(checkMeshEqual(buf.vertices, buf.indices, {quad::xn, quad::xp, quad::yn, quad::yp, quad::zn, quad::zp}));
 }
 
+}
+
+static MeshMakeData makeAreaMMD(const NodeDefManager *ndef, u16 side, content_t fill)
+{
+	MeshMakeData data{ndef, side, MeshGrid{1}};
+	data.m_generate_minimap = false;
+	data.m_smooth_lighting = false;
+	data.m_enable_water_reflections = false;
+	data.m_blockpos = {0, 0, 0};
+	for (s16 x = -3; x < side + 3; x++)
+	for (s16 y = -3; y < side + 3; y++)
+	for (s16 z = -3; z < side + 3; z++)
+		data.m_vmanip.setNode({x, y, z}, {fill, 0, 0});
+	return data;
+}
+
+void TestMapblockMeshGenerator::testGreedyMeshing()
+{
+	MockGameDef gamedef;
+	content_t stone = gamedef.addSimpleNode("stone", 42);
+	gamedef.finalize();
+
+	// A 4x1x3 slab of stone
+	auto generate = [&] (bool greedy) {
+		MeshMakeData data = makeAreaMMD(gamedef.ndef(), 4, CONTENT_AIR);
+		data.m_greedy_meshing = greedy;
+		for (s16 x = 0; x < 4; x++)
+		for (s16 z = 0; z < 3; z++)
+			data.m_vmanip.setNode({x, 0, z}, {stone, 0, 0});
+		MeshCollector col{{}};
+		MapblockMeshGenerator(&data, &col).generate();
+		UASSERTEQ(std::size_t, col.prebuffers[0].size(), 1);
+		return col.prebuffers[0][0];
+	};
+	auto plain = generate(false);
+	auto merged = generate(true);
+	UASSERTEQ(std::size_t, plain.vertices.size(), 4 * (12 + 12 + 4 + 4 + 3 + 3));
+	// One quad per side
+	UASSERTEQ(std::size_t, merged.vertices.size(), 4 * 6);
+	UASSERTEQ(std::size_t, merged.indices.size(), 6 * 6);
+
+	// The merged mesh covers the same box and repeats the texture once per node
+	aabb3f box_plain(plain.vertices[0].Pos), box_merged(merged.vertices[0].Pos);
+	for (auto &v : plain.vertices)
+		box_plain.addInternalPoint(v.Pos);
+	for (auto &v : merged.vertices)
+		box_merged.addInternalPoint(v.Pos);
+	UASSERT(box_plain.MinEdge == box_merged.MinEdge);
+	UASSERT(box_plain.MaxEdge == box_merged.MaxEdge);
+	for (u32 q = 0; q < 6; q++) {
+		const video::S3DVertex *v = &merged.vertices[4 * q];
+		v3f size = v[2].Pos - v[0].Pos;
+		f32 area = std::fabs(size.X * size.Y) + std::fabs(size.X * size.Z) +
+				std::fabs(size.Y * size.Z);
+		v2f uv_size = v[2].TCoords - v[0].TCoords;
+		UASSERT(std::fabs(std::fabs(uv_size.X * uv_size.Y) * BS * BS - area) < 0.01f);
+	}
+}
+
+void TestMapblockMeshGenerator::testSideConnections()
+{
+	MockGameDef gamedef;
+	content_t stone = gamedef.addSimpleNode("stone", 42);
+	gamedef.finalize();
+	const NodeDefManager *ndef = gamedef.ndef();
+
+	{
+		MeshMakeData data = makeAreaMMD(ndef, 16, CONTENT_AIR);
+		UASSERTEQ(u16, get_side_connections(&data), SIDE_CONNECTIONS_ALL);
+	}
+	{
+		MeshMakeData data = makeAreaMMD(ndef, 16, stone);
+		UASSERTEQ(u16, get_side_connections(&data), 0);
+	}
+	{
+		// A straight tunnel along X
+		MeshMakeData data = makeAreaMMD(ndef, 16, stone);
+		for (s16 x = 0; x < 16; x++)
+			data.m_vmanip.setNode({x, 8, 8}, {CONTENT_AIR, 0, 0});
+		UASSERTEQ(u16, get_side_connections(&data), side_connection_bit(0, 1));
+	}
+	{
+		// A bent tunnel from -X to +Y, plus a closed cave
+		MeshMakeData data = makeAreaMMD(ndef, 16, stone);
+		for (s16 x = 0; x <= 5; x++)
+			data.m_vmanip.setNode({x, 3, 7}, {CONTENT_AIR, 0, 0});
+		for (s16 y = 3; y < 16; y++)
+			data.m_vmanip.setNode({5, y, 7}, {CONTENT_AIR, 0, 0});
+		for (s16 z = 2; z < 14; z++)
+			data.m_vmanip.setNode({10, 10, z}, {CONTENT_AIR, 0, 0});
+		UASSERTEQ(u16, get_side_connections(&data), side_connection_bit(0, 3));
+	}
+	{
+		// An open pocket at a single side connects nothing
+		MeshMakeData data = makeAreaMMD(ndef, 16, stone);
+		data.m_vmanip.setNode({0, 4, 4}, {CONTENT_AIR, 0, 0});
+		UASSERTEQ(u16, get_side_connections(&data), 0);
+	}
 }

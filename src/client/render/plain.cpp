@@ -107,7 +107,8 @@ std::unique_ptr<RenderStep> create3DStage(Client *client, v2f scale)
 static v2f getDownscaleFactor()
 {
 	u16 undersampling = MYMAX(g_settings->getU16("undersampling"), 1);
-	return v2f(1.0f / undersampling);
+	f32 render_scale = rangelim(g_settings->getFloat("render_scale"), 0.25f, 1.0f);
+	return v2f(render_scale / undersampling);
 }
 
 RenderStep* addUpscaling(RenderPipeline *pipeline, RenderStep *previousStep, v2f downscale_factor, Client *client)
@@ -129,11 +130,19 @@ RenderStep* addUpscaling(RenderPipeline *pipeline, RenderStep *previousStep, v2f
 	// Initialize buffer
 	TextureBuffer *buffer = pipeline->createOwned<TextureBuffer>();
 	buffer->setTexture(TEXTURE_LOWRES_COLOR, downscale_factor, "lowres_color", color_format);
+#ifdef __vita__
+	// vitaGL has no depth textures, but gives every framebuffer object a
+	// depth buffer of its own
+	TextureBufferOutput *buffer_output = pipeline->createOwned<TextureBufferOutput>(
+			buffer, std::vector<u8> {TEXTURE_LOWRES_COLOR});
+	(void)depth_format;
+#else
 	buffer->setTexture(TEXTURE_LOWRES_DEPTH, downscale_factor, "lowres_depth", depth_format);
 
 	// Attach previous step to the buffer
 	TextureBufferOutput *buffer_output = pipeline->createOwned<TextureBufferOutput>(
 			buffer, std::vector<u8> {TEXTURE_LOWRES_COLOR}, TEXTURE_LOWRES_DEPTH);
+#endif
 	previousStep->setRenderTarget(buffer_output);
 
 	// Add upscaling step

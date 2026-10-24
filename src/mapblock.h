@@ -462,6 +462,8 @@ public:
 
 	// marks the sides which are opaque: 00+Z-Z+Y-Y+X-X
 	u8 solid_sides = 0;
+	// which sides are connected through non-solid nodes, see get_side_connections()
+	u16 side_connections = 0x7FFF;
 #endif
 
 private:

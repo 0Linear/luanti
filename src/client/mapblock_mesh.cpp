@@ -455,6 +455,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 	m_tsrc(client->getTextureSource()),
 	m_shdrsrc(client->getShaderSource()),
 	m_bounding_sphere_center((data->m_side_length * 0.5f - 0.5f) * BS),
+	m_lod(data->m_lod),
 	m_animation_force_timer(0), // force initial animation
 	m_last_crack(-1)
 {
@@ -792,6 +793,106 @@ u8 get_solid_sides(MeshMakeData *data)
 			if (NDT_solidness[ndef->get(top).drawtype] != 2)
 				result &= ~(1 << k);
 		}
+	}
+	return result;
+}
+
+u16 get_side_connections(MeshMakeData *data)
+{
+	const v3s16 blockpos_nodes = data->m_blockpos * MAP_BLOCKSIZE;
+	const NodeDefManager *ndef = data->m_nodedef;
+	const s32 side = data->m_side_length;
+	// Big meshes are not occlusion culled anyway (see ClientMap::updateDrawList)
+	if (side > 2 * MAP_BLOCKSIZE)
+		return SIDE_CONNECTIONS_ALL;
+
+	// Power of two sizes only (one or two map blocks), for cheap indexing
+	if (side & (side - 1))
+		return SIDE_CONNECTIONS_ALL;
+	const u32 shift = side == 32 ? 5 : 4;
+	assert((1 << shift) == side);
+
+	enum : u8 { OPEN, SOLID, VISITED };
+	thread_local std::vector<u8> state;
+	state.resize(side * side * side);
+	u32 solid_count = 0;
+	{
+		const VoxelManipulator &vm = data->m_vmanip;
+		content_t last_c = CONTENT_IGNORE;
+		bool last_solid = NDT_solidness[ndef->get(last_c).drawtype] == 2;
+		u8 *out = state.data();
+		for (s16 z = 0; z < side; z++)
+		for (s16 y = 0; y < side; y++) {
+			const MapNode *row = &vm.m_data[vm.m_area.index(
+					blockpos_nodes + v3s16(0, y, z))];
+			for (s16 x = 0; x < side; x++) {
+				const content_t c = row[x].getContent();
+				if (c != last_c) {
+					last_c = c;
+					last_solid = NDT_solidness[ndef->get(c).drawtype] == 2;
+				}
+				*out++ = last_solid ? SOLID : OPEN;
+				solid_count += last_solid;
+			}
+		}
+	}
+	if (solid_count == 0)
+		return SIDE_CONNECTIONS_ALL;
+	if (solid_count == state.size())
+		return 0;
+
+	const s32 stride_y = side, stride_z = side * side;
+	auto sides_of = [&] (s32 x, s32 y, s32 z) -> u8 {
+		return (x == 0 ? 1 : 0) | (x == side - 1 ? 2 : 0) |
+			(y == 0 ? 4 : 0) | (y == side - 1 ? 8 : 0) |
+			(z == 0 ? 16 : 0) | (z == side - 1 ? 32 : 0);
+	};
+
+	// Flood fill every air pocket that touches the boundary and connect all
+	// sides it touches
+	u16 result = 0;
+	thread_local std::vector<u32> stack;
+	auto fill_from = [&] (s32 x, s32 y, s32 z) {
+		u32 start = x + y * stride_y + z * stride_z;
+		if (state[start] != OPEN)
+			return;
+		state[start] = VISITED;
+		stack.clear();
+		stack.push_back(start);
+		u8 touched = 0;
+		while (!stack.empty()) {
+			u32 i = stack.back();
+			stack.pop_back();
+			s32 nx = i & (side - 1), ny = (i >> shift) & (side - 1), nz = i >> (2 * shift);
+			touched |= sides_of(nx, ny, nz);
+			auto visit = [&] (u32 j) {
+				if (state[j] == OPEN) {
+					state[j] = VISITED;
+					stack.push_back(j);
+				}
+			};
+			if (nx > 0) visit(i - 1);
+			if (nx < side - 1) visit(i + 1);
+			if (ny > 0) visit(i - stride_y);
+			if (ny < side - 1) visit(i + stride_y);
+			if (nz > 0) visit(i - stride_z);
+			if (nz < side - 1) visit(i + stride_z);
+		}
+		for (u8 a = 0; a < 6; a++)
+		for (u8 b = a + 1; b < 6; b++) {
+			if ((touched & (1 << a)) && (touched & (1 << b)))
+				result |= side_connection_bit(a, b);
+		}
+	};
+
+	for (s32 i = 0; i < side && result != SIDE_CONNECTIONS_ALL; i++)
+	for (s32 j = 0; j < side && result != SIDE_CONNECTIONS_ALL; j++) {
+		fill_from(0, i, j);
+		fill_from(side - 1, i, j);
+		fill_from(i, 0, j);
+		fill_from(i, side - 1, j);
+		fill_from(i, j, 0);
+		fill_from(i, j, side - 1);
 	}
 	return result;
 }

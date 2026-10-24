@@ -154,6 +154,7 @@ static const std::string ClientMap_settings[] = {
 	"transparency_sorting_distance",
 	"occlusion_culler",
 	"enable_raytraced_culling",
+	"cave_culling",
 };
 
 ClientMap::ClientMap(
@@ -201,6 +202,8 @@ void ClientMap::onSettingChanged(std::string_view name, bool all)
 		m_loops_occlusion_culler = g_settings->get("occlusion_culler") == "loops";
 	if (all || name == "enable_raytraced_culling")
 		m_enable_raytraced_culling = g_settings->getBool("enable_raytraced_culling");
+	if (all || name == "cave_culling")
+		m_enable_cave_culling = g_settings->getBool("cave_culling");
 }
 
 ClientMap::~ClientMap()
@@ -546,6 +549,8 @@ void ClientMap::updateDrawList()
 		u32 blocks_visited = 0;
 		// Block sides that were not traversed
 		u32 sides_skipped = 0;
+		// ... of those, because cave culling found no way through the mesh
+		u32 sides_cave_culled = 0;
 
 		std::queue<v3s16> blocks_to_consider;
 
@@ -617,6 +622,19 @@ void ClientMap::updateDrawList()
 
 			// Occluded near sides will further occlude the far sides
 			u8 visible_outer_sides = flags & 0x07;
+
+			// Cave culling: the sides this mesh was entered through (one per
+			// axis, the side facing the camera), and which sides they are
+			// connected to through non-solid nodes
+			const bool is_camera_mesh = block_coord == camera_mesh;
+			const u16 side_connections = (occlusion_culling_enabled &&
+					m_enable_cave_culling && block) ?
+					block->side_connections : SIDE_CONNECTIONS_ALL;
+			u8 entry_sides = 0;
+			for (u8 axis = 0; axis < 3; axis++) {
+				if ((visible_outer_sides & (1 << axis)) && look[axis] != 0)
+					entry_sides |= 1 << (2 * axis + (look[axis] < 0 ? 1 : 0));
+			}
 
 			// Raytraced occlusion culling - send rays from the camera to the block's corners
 			if (occlusion_culling_enabled && m_enable_raytraced_culling &&
@@ -703,6 +721,21 @@ void ClientMap::updateDrawList()
 					bool side_visible = ((near_transparency & adjacent_sides) | (near_transparency & my_side & dominant_axis)) != 0;
 					side_visible = side_visible && ((far_side_mask & transparent_sides) != 0);
 
+					if (side_visible && !is_camera_mesh &&
+							side_connections != SIDE_CONNECTIONS_ALL) {
+						const u8 exit_side = 2 * axis + (next_pos_offset > 0 ? 1 : 0);
+						bool connected = false;
+						for (u8 side = 0; side < 6; side++) {
+							if ((entry_sides & (1 << side)) &&
+									(side_connections & side_connection_bit(side, exit_side)))
+								connected = true;
+						}
+						if (!connected) {
+							side_visible = false;
+							sides_cave_culled++;
+						}
+					}
+
 					v3s16 next_pos = block_coord;
 					next_pos[axis] += next_pos_offset;
 
@@ -731,6 +764,7 @@ void ClientMap::updateDrawList()
 			}
 		}
 		g_profiler->avg("MapBlock sides skipped [#]", sides_skipped);
+		g_profiler->avg("MapBlock sides cave culled [#]", sides_cave_culled);
 		g_profiler->avg("MapBlocks examined [#]", blocks_visited);
 	}
 
@@ -745,6 +779,41 @@ void ClientMap::updateDrawList()
 	g_profiler->avg("MapBlocks occlusion culled [#]", blocks_occlusion_culled);
 	g_profiler->avg("MapBlocks frustum culled [#]", blocks_frustum_culled);
 	g_profiler->avg("MapBlocks drawn [#]", m_drawlist.size());
+
+	updateMeshLods();
+}
+
+void ClientMap::updateMeshLods()
+{
+	const f32 lod_distance = m_client->getMeshLodDistance();
+	if (lod_distance <= 0)
+		return;
+
+	const v3f cam_pos_nodes = m_camera_position / BS;
+	m_client->setMeshLodCenter(cam_pos_nodes);
+
+	// Re-mesh visible meshes that crossed the level of detail distance.
+	// Limited per update, so that a teleport doesn't stall new meshes.
+	const u16 side = m_client->getMeshGrid().cell_size * MAP_BLOCKSIZE;
+	u32 updates = 0;
+	for (auto &it : m_drawlist) {
+		MapBlockMesh *mesh = it.second->mesh;
+		if (!mesh || mesh->isLodUpdateQueued())
+			continue;
+		const v3f center = intToFloat(it.first * MAP_BLOCKSIZE, 1.0f) +
+				v3f(side * 0.5f - 0.5f);
+		const f32 d = center.getDistanceFrom(cam_pos_nodes);
+		const u8 lod = mesh->getLod();
+		const u8 wanted = lod ? (d >= lod_distance) :
+				(d > lod_distance + MESH_LOD_HYSTERESIS);
+		if (wanted == lod)
+			continue;
+		m_client->addUpdateMeshTask(it.first, false, false);
+		mesh->setLodUpdateQueued();
+		if (++updates == 16)
+			break;
+	}
+	g_profiler->avg("MapBlock LOD updates [#]", updates);
 }
 
 void ClientMap::touchMapBlocks()

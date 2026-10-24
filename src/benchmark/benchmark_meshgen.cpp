@@ -137,8 +137,13 @@ TEST_CASE("benchmark_meshgen")
 			f.visuals = std::make_unique<NodeVisuals>();
 	});
 
-	for (bool smooth : {true, false}) {
+	for (int mode = 0; mode < 5; mode++) {
+		const bool smooth = !(mode & 1) && mode != 4;
+		const bool greedy = mode >= 2;
+		const u8 lod = mode == 4;
 		MeshMakeData data(ndef, 32, MeshGrid{2});
+		data.m_greedy_meshing = greedy;
+		data.m_lod = lod;
 		data.m_generate_minimap = false;
 		data.m_smooth_lighting = smooth;
 		data.m_enable_water_reflections = false;
@@ -152,12 +157,16 @@ TEST_CASE("benchmark_meshgen")
 			for (const auto &layer : collector.prebuffers)
 				for (const auto &buf : layer)
 					vertices += buf.vertices.size();
-			std::cout << "meshgen smooth=" << smooth << ": " << vertices
+			std::cout << "meshgen smooth=" << smooth << " greedy=" << greedy
+				<< " lod=" << (int)lod << ": " << vertices
 				<< " vertices, hash " << std::hex << hashMesh(collector)
 				<< std::dec << std::endl;
 		}
 
-		BENCHMARK_ADVANCED(smooth ? "meshgen_32_smooth" : "meshgen_32_flat")(
+		static const char *names[5] = {"meshgen_32_smooth", "meshgen_32_flat",
+				"meshgen_32_smooth_greedy", "meshgen_32_flat_greedy",
+				"meshgen_32_lod_greedy"};
+		BENCHMARK_ADVANCED(names[mode])(
 				Catch::Benchmark::Chronometer meter) {
 			meter.measure([&] {
 				MeshCollector collector(v3f(16 * BS), v3f());
@@ -165,5 +174,13 @@ TEST_CASE("benchmark_meshgen")
 				return collector.prebuffers[0].size();
 			});
 		};
+
+		if (mode == 0) {
+			std::cout << "side connections: " << std::hex
+				<< get_side_connections(&data) << std::dec << std::endl;
+			BENCHMARK("side_connections_32") {
+				return get_side_connections(&data);
+			};
+		}
 	}
 }

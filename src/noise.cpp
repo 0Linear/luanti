@@ -27,6 +27,7 @@
 #include "noise.h"
 #include <iostream>
 #include <cstring> // memset
+#include <vector>
 #include "debug.h"
 #include "util/numeric.h"
 #include "util/string.h"
@@ -518,6 +519,11 @@ void Noise::valueMap2D(
 		for (i = 0; i != nlx; i++)
 			noise_buf[index++] = noise2d(x0 + i, y0 + j, seed);
 
+	if (separable) {
+		valueMap2DSeparable(nlx, u, v, step_x, step_y, eased);
+		return;
+	}
+
 	//calculate interpolations
 	index  = 0;
 	noisey = 0;
@@ -588,6 +594,11 @@ void Noise::valueMap3D(
 			for (i = 0; i != nlx; i++)
 				noise_buf[index++] = noise3d(x0 + i, y0 + j, z0 + k, seed);
 
+	if (separable) {
+		valueMap3DSeparable(nlx, nly, u, v, w, step_x, step_y, step_z, eased);
+		return;
+	}
+
 	//calculate interpolations
 	index  = 0;
 	noisey = 0;
@@ -645,6 +656,95 @@ void Noise::valueMap3D(
 }
 #undef idx
 
+
+namespace {
+	/// Lattice cell and (eased) position within it of each point along an
+	/// axis. Steps through the cells exactly like the plain interpolation.
+	struct AxisSteps {
+		std::vector<u32> cell;
+		std::vector<float> t;
+
+		void compute(u32 n, float pos, float step, bool eased)
+		{
+			cell.resize(n);
+			t.resize(n);
+			u32 c = 0;
+			for (u32 i = 0; i != n; i++) {
+				cell[i] = c;
+				t[i] = eased ? easeCurve(pos) : pos;
+				pos += step;
+				if (pos >= 1.0f) {
+					pos -= 1.0f;
+					c++;
+				}
+			}
+		}
+	};
+
+	thread_local AxisSteps steps_x, steps_y, steps_z;
+	thread_local std::vector<float> lattice_row;
+}
+
+void Noise::valueMap2DSeparable(u32 nlx, float u, float v,
+		float step_x, float step_y, bool eased)
+{
+	steps_x.compute(sx, u, step_x, eased);
+	steps_y.compute(sy, v, step_y, eased);
+	const u32 *cx = steps_x.cell.data();
+	const float *tx = steps_x.t.data();
+	lattice_row.resize(nlx);
+	float *row = lattice_row.data();
+	// Lattice columns that are actually used
+	const u32 ncols = cx[sx - 1] + 2;
+
+	u32 index = 0;
+	for (u32 j = 0; j != sy; j++) {
+		const float ty = steps_y.t[j];
+		const float *l0 = &noise_buf[steps_y.cell[j] * nlx];
+		const float *l1 = l0 + nlx;
+		for (u32 n = 0; n != ncols; n++)
+			row[n] = linearInterpolation(l0[n], l1[n], ty);
+		for (u32 i = 0; i != sx; i++) {
+			const float *p = &row[cx[i]];
+			value_buf[index++] = linearInterpolation(p[0], p[1], tx[i]);
+		}
+	}
+}
+
+void Noise::valueMap3DSeparable(u32 nlx, u32 nly, float u, float v, float w,
+		float step_x, float step_y, float step_z, bool eased)
+{
+	steps_x.compute(sx, u, step_x, eased);
+	steps_y.compute(sy, v, step_y, eased);
+	steps_z.compute(sz, w, step_z, eased);
+	const u32 *cx = steps_x.cell.data();
+	const float *tx = steps_x.t.data();
+	lattice_row.resize(nlx);
+	float *row = lattice_row.data();
+	const u32 ncols = cx[sx - 1] + 2;
+	const u32 plane = nlx * nly;
+
+	u32 index = 0;
+	for (u32 k = 0; k != sz; k++) {
+		const float tz = steps_z.t[k];
+		for (u32 j = 0; j != sy; j++) {
+			const float ty = steps_y.t[j];
+			const float *l00 = &noise_buf[steps_z.cell[k] * plane + steps_y.cell[j] * nlx];
+			const float *l10 = l00 + nlx;
+			const float *l01 = l00 + plane;
+			const float *l11 = l01 + nlx;
+			for (u32 n = 0; n != ncols; n++) {
+				float a = linearInterpolation(l00[n], l10[n], ty);
+				float b = linearInterpolation(l01[n], l11[n], ty);
+				row[n] = linearInterpolation(a, b, tz);
+			}
+			for (u32 i = 0; i != sx; i++) {
+				const float *p = &row[cx[i]];
+				value_buf[index++] = linearInterpolation(p[0], p[1], tx[i]);
+			}
+		}
+	}
+}
 
 float *Noise::noiseMap2D(float x, float y, float *persistence_map)
 {

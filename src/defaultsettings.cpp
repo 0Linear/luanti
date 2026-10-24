@@ -107,7 +107,9 @@ void set_default_settings()
 	settings->setDefault("mesh_buffer_min_vertices", "300");
 	settings->setDefault("free_static_mesh_data", "false");
 	settings->setDefault("vertex_fog", "false");
-	settings->setDefault("vertex_fog", "false");
+	settings->setDefault("greedy_meshing", "false");
+	settings->setDefault("cave_culling", "false");
+	settings->setDefault("mesh_lod_distance", "0");
 	settings->setDefault("free_move", "false");
 	settings->setDefault("pitch_move", "false");
 	settings->setDefault("fast_move", "false");
@@ -244,6 +246,7 @@ void set_default_settings()
 #endif
 	settings->setDefault("fsaa", "2");
 	settings->setDefault("undersampling", "1");
+	settings->setDefault("render_scale", "1.0");
 	settings->setDefault("world_aligned_mode", "enable");
 	settings->setDefault("autoscale_mode", "disable");
 	settings->setDefault("texture_min_size", std::to_string(TEXTURE_FILTER_MIN_SIZE));
@@ -610,13 +613,13 @@ void set_default_settings()
 
 	// PlayStation Vita: 3 usable Cortex-A9 cores @ 444 MHz, ~365 MiB RAM,
 	// SGX543MP4+ tile-based GPU driving a 960x544 screen.
-	// Everything here trades visual extras for a stable 30 FPS.
+	// Everything here trades visual extras for frame rate.
 #ifdef __vita__
 	settings->setDefault("vita_overclock", "true");
 	settings->setDefault("vita_param_buffer_size", "24");
 	settings->setDefault("vita_triple_buffering", "true");
 	settings->setDefault("vita_luajit_jit", "true");
-	settings->setDefault("vita_vblank_interval", "2");
+	settings->setDefault("vita_vblank_interval", "1");
 
 	settings->setDefault("video_driver", "ogles2");
 	// Fewer draw calls, see TextureSource::generateAtlasTexture
@@ -625,15 +628,22 @@ void set_default_settings()
 	settings->setDefault("free_static_mesh_data", "true");
 	// Saves a sqrt and four pow() per pixel; the GPU is fill-rate bound
 	settings->setDefault("vertex_fog", "true");
-	// Saves a sqrt and four pow() per pixel; the GPU is fill-rate bound
-	settings->setDefault("vertex_fog", "true");
+	// Far fewer vertices, see MapblockMeshGenerator::drawGreedyFaces
+	settings->setDefault("greedy_meshing", "true");
+	// Skips caves and mountains that can't be seen, see get_side_connections()
+	settings->setDefault("cave_culling", "true");
+	// Simpler meshes beyond this distance, see MeshMakeData::m_lod
+	settings->setDefault("mesh_lod_distance", "32");
+	// Draw the world at 720x408 and scale it up; the HUD and menus stay sharp
+	settings->setDefault("render_scale", "0.75");
 	settings->setDefault("screen_w", "960");
 	settings->setDefault("screen_h", "544");
 	settings->setDefault("fullscreen", "true");
 	settings->setDefault("performance_tradeoffs", "true");
 
-	// Frame pacing: 30 FPS locked to every 2nd vblank (vita_vblank_interval)
-	// is smoother than an unstable 40-50. fps_max only acts as a cap.
+	// Frame pacing: aim for 60 FPS; triple buffering keeps a missed vblank
+	// from halving the frame rate. vita_vblank_interval = 2 locks to 30 FPS
+	// instead, which some prefer to a frame rate between 30 and 60.
 	settings->setDefault("vsync", "true");
 	settings->setDefault("fps_max", "60");
 	settings->setDefault("fps_max_unfocused", "10");
@@ -682,6 +692,16 @@ void set_default_settings()
 	settings->setDefault("emergequeue_limit_diskonly", "32");
 	settings->setDefault("emergequeue_limit_generate", "16");
 	settings->setDefault("num_emerge_threads", "1");
+
+	// The in-process server shares the CPU with rendering: run game logic
+	// (Lua globalsteps, ABMs, node timers, liquids) less often and in
+	// smaller pieces. Objects are interpolated by the client anyway.
+	settings->setDefault("dedicated_server_step", "0.12");
+	settings->setDefault("abm_interval", "2.0");
+	settings->setDefault("abm_time_budget", "0.1");
+	settings->setDefault("nodetimer_interval", "0.4");
+	settings->setDefault("active_block_mgmt_interval", "3.0");
+	settings->setDefault("liquid_loop_max", "5000");
 
 	// The memory card is slow; write less often and less carefully.
 	settings->setDefault("server_map_save_interval", "15");

@@ -7,6 +7,7 @@
 #include "nodedef.h"
 #include "tile.h"
 #include "voxel.h"
+#include <S3DVertex.h>
 #include <vector>
 
 struct MeshMakeData;
@@ -120,6 +121,32 @@ private:
 	void drawAutoLightedCuboid(aabb3f box, const TileSpec &tile, f32 const *txc	= nullptr, u8 mask = 0);
 	void drawAutoLightedCuboid(aabb3f box, const TileSpec *tiles, int tile_count, f32 const *txc = nullptr, u8 mask = 0);
 	u8 getNodeBoxMask(aabb3f box, u8 solid_neighbors, u8 sametype_neighbors) const;
+
+// greedy meshing
+	/*
+		Faces of solid nodes with uniform lighting are not drawn right away,
+		but collected per face direction and plane. After all nodes have been
+		visited, runs of equal faces are merged into rectangles that repeat
+		the texture (greedy meshing). Flat terrain, walls and the insides of
+		caves often need several times fewer vertices this way.
+	*/
+	struct GreedyFace {
+		u32 plane; // face direction * side length + position along the normal
+		u16 a, b;  // position within the plane
+		u32 tile;  // index into m_greedy_tiles
+		video::SColor color;
+		v3f pos[4];
+		v2f uv[4];
+	};
+	bool m_greedy = false;
+	bool m_greedy_collect = false; // set while drawing a solid node
+	std::vector<TileSpec> m_greedy_tiles;
+	std::vector<GreedyFace> m_greedy_faces;
+	u32 m_greedy_last_tile = 0;
+
+	static bool canMergeTile(const TileSpec &tile);
+	bool addGreedyFace(int face, const TileSpec &tile, const video::S3DVertex *vertices);
+	void drawGreedyFaces();
 
 // liquid-specific
 	struct LiquidData {

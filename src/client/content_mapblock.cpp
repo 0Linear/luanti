@@ -3,6 +3,7 @@
 // Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
 
 #include <cmath>
+#include <cstring>
 #include "content_mapblock.h"
 #include "util/basic_macros.h"
 #include "util/numeric.h"
@@ -114,6 +115,8 @@ MapblockMeshGenerator::MapblockMeshGenerator(MeshMakeData *input, MeshCollector 
 		m_ao_light_amount[1] = std::pow(0.5f, data->m_ao_gamma_inv);
 		m_ao_light_amount[2] = std::pow(0.25f, data->m_ao_gamma_inv);
 	}
+
+	m_greedy = data->m_greedy_meshing;
 }
 
 void MapblockMeshGenerator::useTile(TileSpec *tile_ret, int index, u8 set_flags,
@@ -322,6 +325,8 @@ void MapblockMeshGenerator::drawCuboid(const aabb3f &box,
 		QuadDiagonal diagonal = face_lighter(k, &vertices[4 * k]);
 		const u16 *indices = diagonal == QuadDiagonal::Diag13 ? quad_indices_13 : quad_indices_02;
 		int tileindex = MYMIN(k, tilecount - 1);
+		if (m_greedy_collect && addGreedyFace(k, tiles[tileindex], &vertices[4 * k]))
+			continue;
 		collector->append(tiles[tileindex], &vertices[4 * k], 4, indices, 6);
 	}
 }
@@ -768,6 +773,7 @@ void MapblockMeshGenerator::drawSolidNode()
 	auto box = aabb3f(v3f(-0.5 * BS), v3f(0.5 * BS));
 	box.MinEdge += cur_node.origin;
 	box.MaxEdge += cur_node.origin;
+	m_greedy_collect = m_greedy && !LIQUID;
 	if (data->m_smooth_lighting) {
 		LightPair lights[6][4];
 		for (int face = 0; face < 6; ++face) {
@@ -811,6 +817,216 @@ void MapblockMeshGenerator::drawSolidNode()
 			}
 			return QuadDiagonal::Diag02;
 		});
+	}
+	m_greedy_collect = false;
+}
+
+/*
+	Greedy meshing
+*/
+
+// Per face (in tile_dirs order): the axis of the normal, then the two axes
+// spanning the face plane ("a" and "b")
+static constexpr u8 greedy_axes[6][3] = {
+	{1, 0, 2}, {1, 0, 2},
+	{0, 2, 1}, {0, 2, 1},
+	{2, 0, 1}, {2, 0, 1},
+};
+
+static bool isSameGreedyTile(const TileSpec &a, const TileSpec &b)
+{
+	for (int i = 0; i < MAX_TILE_LAYERS; i++) {
+		const TileLayer &la = a.layers[i];
+		const TileLayer &lb = b.layers[i];
+		// texture_layer_idx goes into the vertices, so it has to match as well
+		if (la != lb || la.texture_layer_idx != lb.texture_layer_idx)
+			return false;
+	}
+	return true;
+}
+
+bool MapblockMeshGenerator::canMergeTile(const TileSpec &tile)
+{
+	for (const TileLayer &layer : tile.layers) {
+		if (layer.empty())
+			continue;
+		// Merged faces repeat the texture
+		constexpr u8 tileable = MATERIAL_FLAG_TILEABLE_HORIZONTAL |
+				MATERIAL_FLAG_TILEABLE_VERTICAL;
+		if ((layer.material_flags & tileable) != tileable)
+			return false;
+		// Would break transparency sorting
+		if (layer.isTransparent())
+			return false;
+		// OpenGL ES 2 can only repeat power-of-two textures. Atlases and
+		// array textures repeat each layer in the shader or the sampler.
+		if (layer.texture && !isArrayTexture(layer.texture)) {
+			const auto size = layer.texture->getSize();
+			if ((size.Width & (size.Width - 1)) || (size.Height & (size.Height - 1)))
+				return false;
+		}
+	}
+	return true;
+}
+
+bool MapblockMeshGenerator::addGreedyFace(int face, const TileSpec &tile,
+		const video::S3DVertex *vertices)
+{
+	// Only faces with the same light at all corners can be merged without
+	// changing what they look like
+	const video::SColor color = vertices[0].Color;
+	for (int j = 1; j < 4; j++) {
+		if (vertices[j].Color != color)
+			return false;
+	}
+	u32 tile_idx = m_greedy_last_tile;
+	if (tile_idx >= m_greedy_tiles.size() ||
+			!isSameGreedyTile(m_greedy_tiles[tile_idx], tile)) {
+		tile_idx = 0;
+		while (tile_idx < m_greedy_tiles.size() &&
+				!isSameGreedyTile(m_greedy_tiles[tile_idx], tile))
+			tile_idx++;
+		if (tile_idx == m_greedy_tiles.size()) {
+			if (!canMergeTile(tile))
+				return false;
+			m_greedy_tiles.push_back(tile);
+		}
+		m_greedy_last_tile = tile_idx;
+	}
+
+	const u8 *ax = greedy_axes[face];
+	const v3s16 &p = cur_node.p;
+	GreedyFace &f = m_greedy_faces.emplace_back();
+	f.plane = face * data->m_side_length + p[ax[0]];
+	f.a = p[ax[1]];
+	f.b = p[ax[2]];
+	f.tile = tile_idx;
+	f.color = color;
+	for (int j = 0; j < 4; j++) {
+		f.pos[j] = vertices[j].Pos;
+		f.uv[j] = vertices[j].TCoords;
+	}
+	return true;
+}
+
+void MapblockMeshGenerator::drawGreedyFaces()
+{
+	if (m_greedy_faces.empty())
+		return;
+	const u32 side = data->m_side_length;
+	auto is_integer = [] (f32 v) {
+		return std::fabs(v - std::round(v)) < 1e-3f;
+	};
+
+	// Bucket the faces by plane (counting sort, keeps the visiting order)
+	std::vector<u32> plane_start(6 * side + 1, 0);
+	for (const GreedyFace &f : m_greedy_faces)
+		plane_start[f.plane + 1]++;
+	for (u32 i = 1; i < plane_start.size(); i++)
+		plane_start[i] += plane_start[i - 1];
+	std::vector<u32> order(m_greedy_faces.size());
+	{
+		std::vector<u32> fill(plane_start.begin(), plane_start.end() - 1);
+		for (u32 i = 0; i < m_greedy_faces.size(); i++)
+			order[fill[m_greedy_faces[i].plane]++] = i;
+	}
+
+	// Face index + 1 per position of the current plane, 0 = none.
+	// Every entry is consumed again, so it stays zeroed between planes.
+	thread_local std::vector<u32> grid;
+	grid.assign(side * side, 0);
+
+	for (u32 plane = 0; plane < 6 * side; plane++) {
+		const u32 begin = plane_start[plane], end = plane_start[plane + 1];
+		if (begin == end)
+			continue;
+		const int face = plane / side;
+		const u8 ax_a = greedy_axes[face][1];
+		const u8 ax_b = greedy_axes[face][2];
+		const v3f normal = v3f::from(tile_dirs[face]);
+
+		for (u32 i = begin; i < end; i++) {
+			const GreedyFace &f = m_greedy_faces[order[i]];
+			grid[f.b * side + f.a] = order[i] + 1;
+		}
+
+		// Faces are visited in node order, so each one that is still in the
+		// grid is the first corner of a new rectangle
+		for (u32 i = begin; i < end; i++) {
+			const GreedyFace &base = m_greedy_faces[order[i]];
+			const u32 a = base.a, b = base.b;
+			if (!grid[b * side + a])
+				continue;
+
+			// Which corners are on the far side along a and b
+			const f32 mid_a = base.pos[0][ax_a] + base.pos[2][ax_a];
+			const f32 mid_b = base.pos[0][ax_b] + base.pos[2][ax_b];
+			bool far_a[4], far_b[4];
+			for (int k = 0; k < 4; k++) {
+				far_a[k] = 2 * base.pos[k][ax_a] > mid_a;
+				far_b[k] = 2 * base.pos[k][ax_b] > mid_b;
+			}
+
+			// The texture coordinates are an affine function of the
+			// position: uv = uv0 + ga * (nodes along a) + gb * (along b)
+			v2f ga, gb;
+			for (int k = 1; k < 4; k++) {
+				if (far_a[k] != far_a[0] && far_b[k] == far_b[0])
+					ga = (base.uv[k] - base.uv[0]) * (far_a[k] ? 1.0f : -1.0f);
+				if (far_b[k] != far_b[0] && far_a[k] == far_a[0])
+					gb = (base.uv[k] - base.uv[0]) * (far_b[k] ? 1.0f : -1.0f);
+			}
+
+			// A face can join if it looks the same and the texture
+			// continues seamlessly (the texture repeats)
+			auto fits = [&] (u32 idx, u32 da, u32 db) {
+				if (!idx)
+					return false;
+				const GreedyFace &f = m_greedy_faces[idx - 1];
+				if (f.tile != base.tile || f.color != base.color)
+					return false;
+				for (int k = 0; k < 4; k++) {
+					v2f d = f.uv[k] - base.uv[k] - ga * da - gb * db;
+					if (!is_integer(d.X) || !is_integer(d.Y))
+						return false;
+				}
+				return true;
+			};
+
+			u32 w = 1;
+			while (a + w < side && fits(grid[b * side + a + w], w, 0))
+				w++;
+			u32 h = 1;
+			for (; b + h < side; h++) {
+				u32 j = 0;
+				while (j < w && fits(grid[(b + h) * side + a + j], j, h))
+					j++;
+				if (j < w)
+					break;
+			}
+			for (u32 j = 0; j < h; j++)
+				memset(&grid[(b + j) * side + a], 0, w * sizeof(u32));
+
+			video::S3DVertex vertices[4];
+			v2f uv_min(1e9f, 1e9f);
+			for (int k = 0; k < 4; k++) {
+				const u32 ea = far_a[k] ? w - 1 : 0;
+				const u32 eb = far_b[k] ? h - 1 : 0;
+				v3f pos = base.pos[k];
+				pos[ax_a] += ea * BS;
+				pos[ax_b] += eb * BS;
+				const v2f uv = base.uv[k] + ga * ea + gb * eb;
+				uv_min.X = std::min(uv_min.X, uv.X);
+				uv_min.Y = std::min(uv_min.Y, uv.Y);
+				vertices[k] = video::S3DVertex(pos, normal, base.color, uv);
+			}
+			// Keep the texture coordinates small for precision
+			const v2f shift(std::floor(uv_min.X), std::floor(uv_min.Y));
+			for (auto &v : vertices)
+				v.TCoords -= shift;
+
+			collector->append(m_greedy_tiles[base.tile], vertices, 4, quad_indices_02, 6);
+		}
 	}
 }
 
@@ -2075,6 +2291,22 @@ void MapblockMeshGenerator::drawNode()
 		return; // Not drawn at all
 
 	cur_node.origin = intToFloat(cur_node.p, BS);
+	// Far away meshes leave out small decorations
+	if (data->m_lod) {
+		switch (cur_node.f->drawtype) {
+		case NDT_PLANTLIKE:
+		case NDT_FIRELIKE:
+		case NDT_TORCHLIKE:
+		case NDT_SIGNLIKE:
+		case NDT_RAILLIKE:
+			return;
+		case NDT_PLANTLIKE_ROOTED:
+			drawSolidNode<false>();
+			return;
+		default:
+			break;
+		}
+	}
 	// Solid nodes don't need the usual setup
 	if (cur_node.f->drawtype == NDT_NORMAL) {
 		drawSolidNode<false>();
@@ -2130,4 +2362,7 @@ void MapblockMeshGenerator::generate()
 		cur_node.f = &nodedef->get(cur_node.n);
 		drawNode();
 	}
+
+	if (m_greedy)
+		drawGreedyFaces();
 }

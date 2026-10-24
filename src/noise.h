@@ -143,6 +143,12 @@ struct NoiseParams {
 	}
 };
 
+#ifdef __vita__
+#define NOISE_SEPARABLE_DEFAULT true
+#else
+#define NOISE_SEPARABLE_DEFAULT false
+#endif
+
 class Noise {
 public:
 	NoiseParams np;
@@ -154,6 +160,16 @@ public:
 	float *value_buf = nullptr;
 	float *persist_buf = nullptr;
 	float *result = nullptr;
+
+	/*
+		Interpolate the noise maps one axis at a time: the lattice is first
+		reduced along y and z once per row, then each point needs a single
+		linear interpolation along x (instead of seven, plus easing the
+		coordinates of every point). Several times faster, and equal to
+		the default up to float rounding, so the same seed can give
+		slightly different maps: only the default on slow devices.
+	*/
+	bool separable = NOISE_SEPARABLE_DEFAULT;
 
 	Noise(const NoiseParams *np, s32 seed, u32 sx, u32 sy, u32 sz=1);
 	~Noise();
@@ -198,6 +214,10 @@ private:
 	void resizeNoiseBuf(bool is3d);
 	void updateResults(float g, float *gmap, const float *persistence_map,
 			size_t bufsize);
+	void valueMap2DSeparable(u32 nlx, float u, float v,
+			float step_x, float step_y, bool eased);
+	void valueMap3DSeparable(u32 nlx, u32 nly, float u, float v, float w,
+			float step_x, float step_y, float step_z, bool eased);
 
 };
 

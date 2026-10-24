@@ -7,6 +7,7 @@ set(benchmark_SRCS
 	${CMAKE_CURRENT_SOURCE_DIR}/benchmark_mapblock.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/benchmark_map.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/benchmark_mapmodify.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/benchmark_noise.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/benchmark_sha.cpp
 	PARENT_SCOPE)
 

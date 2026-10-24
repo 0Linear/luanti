@@ -190,4 +190,7 @@ private:
 
 	bool m_loops_occlusion_culler;
 	bool m_enable_raytraced_culling;
+	bool m_enable_cave_culling;
+
+	void updateMeshLods();
 };

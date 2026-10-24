@@ -300,6 +300,9 @@ public:
 	u64 getMapSeed() const { return m_map_seed; }
 
 	void addUpdateMeshTask(v3s16 blockpos, bool ack_to_server=false, bool urgent=false);
+	/// Mesh level of detail, see MeshMakeData::m_lod
+	void setMeshLodCenter(v3f pos_nodes);
+	f32 getMeshLodDistance() const;
 	// Including blocks at appropriate edges
 	void addUpdateMeshTaskWithEdge(v3s16 blockpos, bool ack_to_server=false, bool urgent=false);
 	void addUpdateMeshTaskForNode(v3s16 nodepos, bool ack_to_server=false, bool urgent=false);

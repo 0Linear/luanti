@@ -55,6 +55,11 @@ struct MeshMakeData
 	bool m_free_static_mesh_data = false;
 	u32 m_mesh_buffer_min_vertices = 0;
 	bool m_enable_waving_water = false;
+	/// Merge equal faces of solid nodes, see MapblockMeshGenerator
+	bool m_greedy_meshing = false;
+	/// Level of detail: 0 = full, 1 = far away (flat lighting, no small
+	/// decorations like plants and torches)
+	u8 m_lod = 0;
 
 	const NodeDefManager *m_nodedef;
 
@@ -243,6 +248,12 @@ public:
 	/// Radius of the bounding-sphere, in BS-space.
 	f32 getBoundingRadius() const { return m_bounding_radius; }
 
+	/// Level of detail the mesh was made with, see MeshMakeData::m_lod
+	u8 getLod() const { return m_lod; }
+	/// A mesh update for a different level of detail has been requested
+	bool isLodUpdateQueued() const { return m_lod_update_queued; }
+	void setLodUpdateQueued() { m_lod_update_queued = true; }
+
 	/// Center of the bounding-sphere, in BS-space, relative to block pos.
 	v3f getBoundingSphereCenter() const { return m_bounding_sphere_center; }
 
@@ -291,6 +302,9 @@ private:
 
 	f32 m_bounding_radius;
 	v3f m_bounding_sphere_center;
+
+	u8 m_lod = 0;
+	bool m_lod_update_queued = false;
 
 	// Must animate() be called before rendering?
 	bool m_has_animation;
@@ -371,3 +385,31 @@ void getNodeTile(MapNode mn, const v3s16 &p, const v3s16 &dir, MeshMakeData *dat
 /// Bits:
 /// 0 0 -Z +Z -X +X -Y +Y
 u8 get_solid_sides(MeshMakeData *data);
+
+/*
+	Side connectivity for cave culling (after Tommaso Checchi's "advanced
+	cave culling" algorithm): bit side_connection_bit(a, b) is set if
+	non-solid nodes connect side a to side b of the mesh, i.e. if the mesh
+	could be seen through by entering at side a and leaving at side b.
+	Sides are numbered like the bits of get_solid_sides(): 2 * axis + (+).
+*/
+constexpr u16 SIDE_CONNECTIONS_ALL = 0x7FFF;
+
+/*
+	Meshes further away than mesh_lod_distance are made with m_lod = 1.
+	A mesh switches to the far level beyond that distance plus this
+	(in nodes), so that meshes near the threshold don't flip back and forth.
+*/
+constexpr f32 MESH_LOD_HYSTERESIS = 8.0f;
+
+constexpr u16 side_connection_bit(u8 a, u8 b)
+{
+	if (a > b) {
+		u8 t = a;
+		a = b;
+		b = t;
+	}
+	return 1 << (a * (11 - a) / 2 + b - a - 1);
+}
+
+u16 get_side_connections(MeshMakeData *data);

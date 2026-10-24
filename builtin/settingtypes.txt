@@ -506,6 +506,11 @@ viewing_range (Viewing range) int 200 20 4000
 #    to a non-default value.
 undersampling (Undersampling) int 1 1 8
 
+#    Like undersampling, but with any factor: the game world is rendered at
+#    this fraction of the screen resolution (e.g. 0.75), then scaled up.
+#    The GUI stays at full resolution.
+render_scale (Render scale) float 1.0 0.25 1.0
+
 [**3D]
 
 #    3D support.
@@ -676,6 +681,12 @@ occlusion_culler (Occlusion Culler) enum bfs bfs,loops
 #
 #    This setting should only be changed if you have performance problems.
 enable_raytraced_culling (Enable Raytraced Culling) bool true
+
+#    Cave culling for the "bfs" occlusion culler: only look through a map
+#    chunk at the sides that are connected by air (or other non-solid nodes).
+#    Hides caves, tunnels and mountain insides that can't be seen. Costs
+#    some extra time when map chunks are meshed.
+cave_culling (Cave culling) bool false
 
 
 
@@ -2062,10 +2073,16 @@ free_static_mesh_data (Free static mesh data) bool false
 #    Note: A restart is required after changing this!
 vertex_fog (Per-vertex fog) bool false
 
-#    Calculate fog per vertex instead of per pixel. Much cheaper on slow GPUs,
-#    but fog boundaries look slightly less smooth. Not used with dynamic shadows.
+#    Merge neighboring faces of solid nodes that look the same into larger
+#    rectangles. Map meshes get several times fewer vertices, which speeds up
+#    rendering on slow GPUs. Faces with uneven lighting are not merged.
+greedy_meshing (Greedy meshing) bool false
+
+#    Map chunks further away than this (in nodes) are drawn with less detail:
+#    flat lighting and no small decorations (plants, torches, rails, signs).
+#    0 = always full detail.
 #    Note: A restart is required after changing this!
-vertex_fog (Per-vertex fog) bool false
+mesh_lod_distance (Mesh level of detail distance) int 0 0 1000
 
 [**PlayStation Vita] [client]
 
@@ -2096,12 +2113,12 @@ vita_triple_buffering (Triple buffering) bool true
 vita_luajit_jit (LuaJIT JIT compiler) bool true
 
 #    With VSync enabled, show each frame for this many display refreshes:
-#    1 = 60 FPS, 2 = 30 FPS, 3 = 20 FPS. A stable 30 FPS feels smoother than
-#    a framerate jumping between 30 and 60.
+#    1 = up to 60 FPS, 2 = 30 FPS, 3 = 20 FPS. A stable 30 FPS can feel
+#    smoother than a frame rate jumping between 30 and 60.
 #    Note: A restart is required after changing this!
 #
 #    Requires: vita
-vita_vblank_interval (Refreshes per frame) int 2 1 4
+vita_vblank_interval (Refreshes per frame) int 1 1 4
 
 #    Distance in nodes at which transparency depth sorting is enabled.
 #    Use this to limit the performance impact of transparency depth sorting.
