@@ -699,6 +699,9 @@ void *EmergeThread::run()
 		MapBlock *block = nullptr;
 
 		porting::TriggerMemoryTrim();
+#ifdef __vita__
+		porting::vita::yieldCpu();
+#endif
 
 		if (!popBlockEmerge(&pos, &bedata)) {
 			m_queue_event.wait();

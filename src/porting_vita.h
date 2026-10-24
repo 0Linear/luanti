@@ -75,6 +75,15 @@ void keepAwake();
 	thread writes the last checkpoints to the log.
 */
 void checkpoint(const char *where);
+
+/*
+	The Vita schedules strictly by priority and has no priority inheritance:
+	a thread that is always busy keeps every lower (or, without time slicing,
+	equal) priority thread on its cores from running, even while that one
+	holds a lock others wait for (malloc, the log). Busy worker loops call
+	this after every item.
+*/
+void yieldCpu();
 void startWatchdog();
 
 } // namespace vita

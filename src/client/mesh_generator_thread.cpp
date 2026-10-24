@@ -359,6 +359,9 @@ void MeshUpdateWorkerThread::doUpdate()
 		sp.stop();
 
 		porting::TriggerMemoryTrim();
+#ifdef __vita__
+		porting::vita::yieldCpu();
+#endif
 
 		// do this after we're done so the interval is enforced without
 		// adding extra latency.

@@ -251,23 +251,11 @@ void onThreadStart(const std::string &name)
 		(The system core is not available to applications.)
 	*/
 	const int mask = SCE_KERNEL_CPU_MASK_USER_1 | SCE_KERNEL_CPU_MASK_USER_2;
-	int prio = 160;
-
-	if (str_starts_with(name, "Mesh")) {
-		// Directly affects how fast the world appears around the player
-		prio = 140;
-	} else if (str_starts_with(name, "Emerge")) {
-		// Bursty and heavy; must not starve the server step
-		prio = 170;
-	} else if (name == "Server") {
-		prio = 150;
-	} else if (str_starts_with(name, "Connection") ||
-			name == "OpenALSoundManager" || name == "CurlFetch") {
-		// Light, but latency-sensitive: ahead of the heavy workers
-		prio = 135;
-	} else if (name == "Minimap") {
-		prio = 180;
-	}
+	// All workers get the same priority: with strict priority scheduling and
+	// no priority inheritance, a busy higher priority worker would starve a
+	// lower priority one holding a lock that the main thread needs (see
+	// yieldCpu()). That stalled the game while loading.
+	const int prio = 160;
 
 	SceUID thid = sceKernelGetThreadId();
 	int ret = sceKernelChangeThreadCpuAffinityMask(thid, mask);
@@ -374,6 +362,9 @@ namespace {
 		while (true) {
 			sceKernelDelayThread(1000 * 1000);
 			const u32 count = checkpoint_count.load();
+			// Only the game records checkpoints, not the main menu
+			if (count == 0)
+				continue;
 			if (count != last_count) {
 				if (reported)
 					errorstream << "Watchdog: main thread is running again" << std::endl;
@@ -411,6 +402,11 @@ void startWatchdog()
 			nullptr);
 	if (thid >= 0)
 		sceKernelStartThread(thid, 0, nullptr);
+}
+
+void yieldCpu()
+{
+	sceKernelDelayThread(100);
 }
 
 void keepAwake()
