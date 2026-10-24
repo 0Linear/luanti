@@ -18,13 +18,96 @@
 #include <iomanip>
 #include <unordered_map>
 
-#ifndef _WIN32
-	#include <iconv.h>
-#else
+#if defined(_WIN32)
 	#include <windows.h>
+#elif !defined(__vita__)
+	#include <iconv.h>
 #endif
 
-#ifndef _WIN32
+#if defined(__vita__)
+
+// newlib's iconv has no usable UTF-8 <-> UTF-32 converter, so convert
+// directly (wchar_t is UTF-32 here)
+static_assert(sizeof(wchar_t) == 4, "wchar_t must hold UTF-32");
+
+std::wstring utf8_to_wide(std::string_view input)
+{
+	std::wstring out;
+	out.reserve(input.size());
+	const auto *p = reinterpret_cast<const unsigned char *>(input.data());
+	const auto *end = p + input.size();
+	while (p < end) {
+		unsigned char c = *p++;
+		char32_t cp;
+		int extra;
+		if (c < 0x80) {
+			out.push_back(c);
+			continue;
+		} else if ((c & 0xE0) == 0xC0) {
+			cp = c & 0x1F;
+			extra = 1;
+		} else if ((c & 0xF0) == 0xE0) {
+			cp = c & 0x0F;
+			extra = 2;
+		} else if ((c & 0xF8) == 0xF0) {
+			cp = c & 0x07;
+			extra = 3;
+		} else {
+			cp = 0x110000; // invalid lead byte
+			extra = 0;
+		}
+		if (end - p < extra)
+			cp = 0x110000;
+		for (int i = 0; i < extra && cp < 0x110000; i++) {
+			if ((p[i] & 0xC0) != 0x80)
+				cp = 0x110000;
+			else
+				cp = (cp << 6) | (p[i] & 0x3F);
+		}
+		p += extra;
+		// Reject overlong forms, surrogates and out of range values
+		static const char32_t min_cp[4] = {0, 0x80, 0x800, 0x10000};
+		if (cp >= 0x110000 || cp < min_cp[extra] || (cp >= 0xD800 && cp <= 0xDFFF)) {
+			infostream << "Couldn't convert UTF-8 string 0x" << hex_encode(input)
+				<< " into wstring" << std::endl;
+			return L"<invalid UTF-8 string>";
+		}
+		out.push_back(static_cast<wchar_t>(cp));
+	}
+	return out;
+}
+
+std::string wide_to_utf8(std::wstring_view input)
+{
+	std::string out;
+	out.reserve(input.size());
+	for (wchar_t wc : input) {
+		const char32_t cp = static_cast<char32_t>(wc);
+		if (cp < 0x80) {
+			out.push_back(static_cast<char>(cp));
+		} else if (cp < 0x800) {
+			out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+			out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+		} else if (cp < 0x10000 && !(cp >= 0xD800 && cp <= 0xDFFF)) {
+			out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+			out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+			out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+		} else if (cp >= 0x10000 && cp < 0x110000) {
+			out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+			out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+			out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+			out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+		} else {
+			infostream << "Couldn't convert wstring 0x" << hex_encode(
+				reinterpret_cast<const char *>(input.data()),
+				input.size() * sizeof(wchar_t)) << " into UTF-8 string" << std::endl;
+			return "<invalid wide string>";
+		}
+	}
+	return out;
+}
+
+#elif !defined(_WIN32)
 
 namespace {
 	class IconvSmartPointer {
@@ -139,7 +222,7 @@ std::string wide_to_utf8(std::wstring_view input)
 	return out;
 }
 
-#else // _WIN32
+#elif defined(_WIN32)
 
 std::wstring utf8_to_wide(std::string_view input)
 {
@@ -168,7 +251,7 @@ std::string wide_to_utf8(std::wstring_view input)
 	return out;
 }
 
-#endif // _WIN32
+#endif
 
 void wide_add_codepoint(std::wstring &result, char32_t codepoint)
 {
