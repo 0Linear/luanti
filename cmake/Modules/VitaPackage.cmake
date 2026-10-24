@@ -30,6 +30,32 @@ if(VITA_VITAGL_DIR)
 endif()
 
 target_link_libraries(${PROJECT_NAME} -Wl,--start-group ${VITA_SYSTEM_LIBS} -Wl,--end-group)
+
+# vita-elf-create appends its import/export tables right after the code
+# segment and fails ("segment 1 overlaps") when the data segment starts
+# less than a few KiB after it, which depends on the code size. Link with
+# the default script, changed to always leave at least 16 KiB in between.
+execute_process(COMMAND ${CMAKE_LINKER} --verbose OUTPUT_VARIABLE VITA_LD_VERBOSE)
+string(FIND "${VITA_LD_VERBOSE}" "==================================================" VITA_LD_START)
+string(FIND "${VITA_LD_VERBOSE}" "==================================================" VITA_LD_END REVERSE)
+if(VITA_LD_START EQUAL -1 OR VITA_LD_END LESS_EQUAL VITA_LD_START)
+	message(FATAL_ERROR "Could not get the default linker script from ${CMAKE_LINKER}")
+endif()
+math(EXPR VITA_LD_START "${VITA_LD_START} + 50")
+math(EXPR VITA_LD_LENGTH "${VITA_LD_END} - ${VITA_LD_START}")
+string(SUBSTRING "${VITA_LD_VERBOSE}" ${VITA_LD_START} ${VITA_LD_LENGTH} VITA_LD_SCRIPT)
+string(REGEX REPLACE "\\. = DATA_SEGMENT_ALIGN \\([^)]*\\);"
+	". = ALIGN(. + 0x4000, 0x1000);" VITA_LD_SCRIPT_GAP "${VITA_LD_SCRIPT}")
+# These only make sense together with DATA_SEGMENT_ALIGN
+string(REGEX REPLACE "\\. = DATA_SEGMENT_RELRO_END \\([^)]*\\);" ""
+	VITA_LD_SCRIPT_GAP "${VITA_LD_SCRIPT_GAP}")
+string(REGEX REPLACE "\\. = DATA_SEGMENT_END \\([^)]*\\);" ""
+	VITA_LD_SCRIPT_GAP "${VITA_LD_SCRIPT_GAP}")
+if(VITA_LD_SCRIPT_GAP STREQUAL VITA_LD_SCRIPT)
+	message(FATAL_ERROR "Unexpected default linker script: no DATA_SEGMENT_ALIGN")
+endif()
+file(WRITE "${CMAKE_BINARY_DIR}/vita_gap.ld" "${VITA_LD_SCRIPT_GAP}")
+target_link_options(${PROJECT_NAME} PRIVATE "-Wl,-T,${CMAKE_BINARY_DIR}/vita_gap.ld")
 target_compile_definitions(${PROJECT_NAME} PRIVATE VITA_NEWLIB_HEAP_MB=${VITA_NEWLIB_HEAP_MB})
 
 # The Cortex-A9 NEON unit flushes denormals to zero, so GCC only
