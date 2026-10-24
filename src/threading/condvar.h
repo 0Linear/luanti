@@ -7,41 +7,39 @@
 
 #ifdef __vita__
 
-#include <atomic>
 #include <climits>
+#include <deque>
 #include <psp2/kernel/threadmgr.h>
 
 /*
-	Condition variable on top of a kernel semaphore, for the PlayStation Vita.
+	Condition variable for the PlayStation Vita, built on kernel semaphores.
 	The condition variables of its pthreads library can lose wakeups, which
 	left threads waiting forever.
 
-	A waiter registers itself while it still holds the mutex, so a notify
-	that follows a state change made under the mutex always sees it. Like
-	std::condition_variable, it may wake up spuriously: always wait in a
-	loop that checks the condition.
+	Every waiting thread sleeps on a semaphore of its own and is queued while
+	it still holds the mutex, so a notify that follows a state change made
+	under the mutex always finds it. A notify only wakes threads that were
+	already waiting: a thread that starts waiting later can't take the
+	wakeup meant for another one (a semaphore shared by all waiters would
+	allow that, which hung the two-way SSCSM channel). Like
+	std::condition_variable, wait in a loop that checks the condition.
 */
 class CondVar
 {
 public:
-	CondVar()
-	{
-		m_sema = sceKernelCreateSema("luanti_condvar", 0, 0, INT_MAX, nullptr);
-	}
-
-	~CondVar()
-	{
-		sceKernelDeleteSema(m_sema);
-	}
-
+	CondVar() = default;
 	CondVar(const CondVar &) = delete;
 	CondVar &operator=(const CondVar &) = delete;
 
 	void wait(std::unique_lock<std::mutex> &lock)
 	{
-		m_waiters.fetch_add(1);
+		const SceUID sema = threadSemaphore();
+		{
+			std::lock_guard guard(m_waiters_mutex);
+			m_waiters.push_back(sema);
+		}
 		lock.unlock();
-		sceKernelWaitSema(m_sema, 1, nullptr);
+		sceKernelWaitSema(sema, 1, nullptr);
 		lock.lock();
 	}
 
@@ -54,25 +52,43 @@ public:
 
 	void notify_one()
 	{
-		int waiters = m_waiters.load();
-		while (waiters > 0) {
-			if (m_waiters.compare_exchange_weak(waiters, waiters - 1)) {
-				sceKernelSignalSema(m_sema, 1);
-				return;
+		SceUID sema = -1;
+		{
+			std::lock_guard guard(m_waiters_mutex);
+			if (!m_waiters.empty()) {
+				sema = m_waiters.front();
+				m_waiters.pop_front();
 			}
 		}
+		if (sema >= 0)
+			sceKernelSignalSema(sema, 1);
 	}
 
 	void notify_all()
 	{
-		int waiters = m_waiters.exchange(0);
-		if (waiters > 0)
-			sceKernelSignalSema(m_sema, waiters);
+		std::deque<SceUID> waiters;
+		{
+			std::lock_guard guard(m_waiters_mutex);
+			waiters.swap(m_waiters);
+		}
+		for (SceUID sema : waiters)
+			sceKernelSignalSema(sema, 1);
 	}
 
 private:
-	SceUID m_sema;
-	std::atomic<int> m_waiters{0};
+	// One semaphore per thread, signalled once per queued wait
+	static SceUID threadSemaphore()
+	{
+		struct ThreadSemaphore {
+			SceUID id = sceKernelCreateSema("luanti_condvar", 0, 0, 1, nullptr);
+			~ThreadSemaphore() { sceKernelDeleteSema(id); }
+		};
+		thread_local ThreadSemaphore sema;
+		return sema.id;
+	}
+
+	std::mutex m_waiters_mutex;
+	std::deque<SceUID> m_waiters;
 };
 
 #else
