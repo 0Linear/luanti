@@ -1623,6 +1623,13 @@ void CIrrDeviceSDL::postVitaKeyEvent(EKEY_CODE key, u32 scancode, bool down)
 
 bool CIrrDeviceSDL::vitaPointerButton(GamepadButton button, bool down)
 {
+#ifdef VITA_INPUT_DEBUG
+	{
+		char buf[96];
+		snprintf(buf, sizeof(buf), "vita button %d = %d (mouse %d,%d)", (int)button, (int)down, MouseX, MouseY);
+		os::Printer::log(buf, ELL_INFORMATION);
+	}
+#endif
 	if (!CursorControl || !CursorControl->isVisible())
 		return false;
 
@@ -1676,6 +1683,13 @@ bool CIrrDeviceSDL::vitaPointerButton(GamepadButton button, bool down)
 
 bool CIrrDeviceSDL::vitaPointerAxis(GamepadAxis axis, s16 value)
 {
+#ifdef VITA_INPUT_DEBUG
+	{
+		char buf[96];
+		snprintf(buf, sizeof(buf), "vita axis %d = %d (mouse %d,%d)", (int)axis, (int)value, MouseX, MouseY);
+		os::Printer::log(buf, ELL_INFORMATION);
+	}
+#endif
 	const int idx = static_cast<int>(axis);
 	if (idx < 0 || idx >= 4)
 		return false;

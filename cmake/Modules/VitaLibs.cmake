@@ -16,9 +16,13 @@ set(VITA_INCDIR "${VITA_SYSROOT}/include")
 # Only the client makes sense on the Vita. Singleplayer still runs an
 # in-process server, which is part of the client binary.
 set(BUILD_SERVER FALSE CACHE BOOL "Build server" FORCE)
-# Unit tests and benchmarks can be enabled to run them in Vita3K
-set(BUILD_UNITTESTS FALSE CACHE BOOL "Build unittests")
-set(BUILD_BENCHMARKS FALSE CACHE BOOL "Build benchmarks")
+# Unit tests and benchmarks only with -DVITA_BUILD_TESTS=ON (to run them in
+# Vita3K). This file is included after the defaults are set, so force them.
+option(VITA_BUILD_TESTS "Build the unit tests and benchmarks into the VPK" OFF)
+if(NOT VITA_BUILD_TESTS)
+	set(BUILD_UNITTESTS FALSE CACHE BOOL "Build unittests" FORCE)
+	set(BUILD_BENCHMARKS FALSE CACHE BOOL "Build benchmarks" FORCE)
+endif()
 set(BUILD_DOCUMENTATION FALSE CACHE BOOL "Build documentation" FORCE)
 set(RUN_IN_PLACE TRUE CACHE BOOL "Run directly in source directory structure" FORCE)
 

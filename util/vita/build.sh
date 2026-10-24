@@ -19,8 +19,9 @@
 #  BUILD_CURL, BUILD_LIBZIP  1 = always build from source, 0 = never,
 #                     auto (default) = only if the SDK's copy is broken
 #  CMAKE_BUILD_TYPE   default: Release
-#  VITA_CMAKE_ARGS    extra CMake arguments, e.g. -DBUILD_UNITTESTS=ON to run
-#                     the unit tests in Vita3K (luanti --run-unittests)
+#  VITA_CMAKE_ARGS    extra CMake arguments, e.g.
+#                     "-DVITA_BUILD_TESTS=ON -DBUILD_UNITTESTS=ON" to run the
+#                     unit tests in Vita3K (luanti --run-unittests)
 
 topdir=$(cd "$(dirname "$0")/../.." && pwd)
 builddir=$(realpath -m "${1:-$topdir/build/vita}")
