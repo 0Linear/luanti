@@ -6,14 +6,14 @@
 
 #include <memory>
 #include <mutex>
-#include <condition_variable>
+#include "threading/condvar.h"
 #include "sscsm_irequest.h"
 
 // FIXME: replace this with an ipc channel
 class StupidChannel
 {
 	std::mutex m_mutex;
-	std::condition_variable m_condvar;
+	CondVar m_condvar;
 	SerializedSSCSMRequest m_request;
 	SerializedSSCSMAnswer m_answer;
 

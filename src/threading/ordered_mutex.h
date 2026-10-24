@@ -4,7 +4,8 @@
 #pragma once
 
 #include <cstdint>
-#include <condition_variable>
+#include <mutex>
+#include "threading/condvar.h"
 
 /*
 	Fair mutex based on ticketing approach.
@@ -40,7 +41,7 @@ public:
 	}
 
 private:
-	std::condition_variable cv;
+	CondVar cv;
 	std::mutex cv_lock;
 	uint_fast32_t next_ticket, counter;
 };
