@@ -158,6 +158,25 @@ Manual CMake usage:
         [-DVITA_VITAGL_DIR=<dir with a custom libvitaGL.a>] \
         [-DVITA_NEWLIB_HEAP_MB=224] [-DVITA_TITLEID=LUAN00001]
 
+### Testing in Vita3K
+
+Luanti runs in [Vita3K](https://vita3k.org) with `libshacccg.suprx` copied
+to its `ur0/data/`. The plain SDL frontend (`--frontend sdl`) does not pass
+keyboard input to the game, so the Vita build can play back controller input
+from a file for automated tests: set `vita_input_script` in `minetest.conf`
+to a path like `ux0:data/luanti/input.txt` containing lines like
+
+    # <ms since start> axis <SDL axis 0-5> <value> | button <SDL button> <0|1>
+    60000 axis 0 32767
+    60500 axis 0 0
+    61000 button 0 1
+    61080 button 0 0
+
+The Vita build also logs where the main thread was when it stops making
+progress for 10 seconds ("Watchdog: main thread stalled").
+
+`render_scale` below 1.0 freezes after loading a world in Vita3K.
+
 ### Implementation notes
 
 * `cmake/Modules/VitaLibs.cmake` sets platform defaults and dependency
@@ -170,3 +189,11 @@ Manual CMake usage:
   buffer and in-process locking (the unix VFS needs POSIX locks and mmap).
 * Rendering goes through IrrlichtMt's OpenGL ES 2 driver on top of vitaGL;
   GLSL ES shaders are translated to Cg by vitaGL.
+* Threading: semaphores and condition variables use kernel semaphores
+  (`src/threading/semaphore.cpp`, `src/threading/condvar.h`), since the
+  timed waits and wakeups of the pthreads library are unreliable. Worker
+  threads all share one priority on cores 1 and 2 and yield between work
+  items: the scheduler is strictly priority based without priority
+  inheritance, so a busy thread could otherwise starve one that holds a
+  lock the main thread needs.
+* Text conversion between UTF-8 and wide strings is done without iconv.

@@ -25,6 +25,9 @@
 #include <psp2/system_param.h>
 #include <vitaGL.h>
 #include <SDL2/SDL_messagebox.h>
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_timer.h>
+#include <fstream>
 
 #include <malloc.h>
 #include <cstdlib>
@@ -153,6 +156,7 @@ void init()
 	sceIoMkdir("ux0:data", 0777);
 	sceIoMkdir(USER_DIR, 0777);
 
+	main_thread_id = sceKernelGetThreadId();
 	startWatchdog();
 }
 
@@ -230,8 +234,74 @@ void preVideoInit()
 		<< (getFreeMemory() >> 20) << " MiB" << std::endl;
 }
 
+/*
+	Testing aid for emulators that can't deliver controller input (Vita3K's
+	plain SDL frontend): plays back gamepad events from the file named by
+	the vita_input_script setting. One event per line:
+	  <ms since start> axis <SDL axis 0-5> <value -32768..32767>
+	  <ms since start> button <SDL button 0-20> <0|1>
+	Lines starting with # are ignored.
+*/
+static int inputScriptThread(SceSize, void *argp)
+{
+	const std::string path = *static_cast<std::string **>(argp)[0];
+	delete static_cast<std::string **>(argp)[0];
+	std::ifstream is(path);
+	if (!is.good()) {
+		errorstream << "vita_input_script: can't open " << path << std::endl;
+		return 0;
+	}
+	const u32 start = SDL_GetTicks();
+	std::string line;
+	while (std::getline(is, line)) {
+		if (line.empty() || line[0] == '#')
+			continue;
+		std::istringstream ls(line);
+		u32 at;
+		std::string kind;
+		int id, value;
+		if (!(ls >> at >> kind >> id >> value))
+			continue;
+		while (SDL_GetTicks() - start < at)
+			sceKernelDelayThread(10 * 1000);
+		SDL_Event ev{};
+		if (kind == "axis") {
+			ev.type = SDL_CONTROLLERAXISMOTION;
+			ev.caxis.which = 0;
+			ev.caxis.axis = id;
+			ev.caxis.value = value;
+		} else if (kind == "button") {
+			ev.type = value ? SDL_CONTROLLERBUTTONDOWN : SDL_CONTROLLERBUTTONUP;
+			ev.cbutton.which = 0;
+			ev.cbutton.button = id;
+			ev.cbutton.state = value ? SDL_PRESSED : SDL_RELEASED;
+		} else {
+			continue;
+		}
+		SDL_PushEvent(&ev);
+		infostream << "vita_input_script: " << line << std::endl;
+	}
+	return 0;
+}
+
+static void startInputScript()
+{
+	std::string path;
+	if (!g_settings->getNoEx("vita_input_script", path) || path.empty())
+		return;
+	SceUID thid = sceKernelCreateThread("luanti_input_script", inputScriptThread,
+			0x10000100, 64 * 1024, 0, SCE_KERNEL_CPU_MASK_USER_1 | SCE_KERNEL_CPU_MASK_USER_2,
+			nullptr);
+	if (thid < 0)
+		return;
+	std::string *arg = new std::string(path);
+	sceKernelStartThread(thid, sizeof(arg), &arg);
+}
+
 void postVideoInit()
 {
+	startInputScript();
+
 	// Pace frames with the display instead of the FPS limiter: waiting for
 	// N vblanks per frame (60/N FPS) gives perfectly even frame times,
 	// while sleeping to hit 30 FPS on a 60 Hz display judders.
@@ -389,8 +459,13 @@ namespace {
 	}
 }
 
+static SceUID main_thread_id = -1;
+
 void checkpoint(const char *where)
 {
+	// Only the main thread's progress matters (shared code calls this too)
+	if (sceKernelGetThreadId() != main_thread_id)
+		return;
 	const u32 n = checkpoint_count.fetch_add(1, std::memory_order_relaxed);
 	checkpoints[n % CHECKPOINT_HISTORY].store(where, std::memory_order_relaxed);
 }

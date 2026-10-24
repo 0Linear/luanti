@@ -1412,6 +1412,7 @@ ConnectionEventPtr Connection::waitEvent(u32 timeout_ms)
 	try {
 		return m_event_queue.pop_front(timeout_ms);
 	} catch(ItemNotFoundException &ex) {
+		VITA_CHECKPOINT("Connection::waitEvent: caught");
 		return ConnectionEvent::create(CONNEVENT_NONE);
 	}
 }
@@ -1460,6 +1461,7 @@ bool Connection::ReceiveTimeoutMs(NetworkPacket *pkt, u32 timeout_ms)
 	*/
 	for(;;) {
 		ConnectionEventPtr e_ptr = waitEvent(timeout_ms);
+		VITA_CHECKPOINT("Connection::ReceiveTimeoutMs: got event");
 		const ConnectionEvent &e = *e_ptr;
 
 		if (e.type != CONNEVENT_NONE) {

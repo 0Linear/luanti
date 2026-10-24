@@ -1687,7 +1687,7 @@ bool CIrrDeviceSDL::vitaPointerAxis(GamepadAxis axis, s16 value)
 void CIrrDeviceSDL::vitaPointerUpdate()
 {
 	const u32 now = os::Timer::getRealTime();
-	const f32 dtime = core::clamp<u32>(now - VitaLastUpdate, 0, 100) / 1000.0f;
+	const f32 dtime = core::clamp<u32>(now - VitaLastUpdate, 0, 250) / 1000.0f;
 	VitaLastUpdate = now;
 
 	if (!CursorControl || !CursorControl->isVisible())

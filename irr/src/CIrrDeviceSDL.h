@@ -173,6 +173,15 @@ public:
 		//! Sets the new position of the cursor.
 		void setPosition(s32 x, s32 y) override
 		{
+#ifdef __vita__
+			// There is no mouse: warping would only produce a motion event
+			// to a stale position. Move the gamepad pointer instead.
+			Device->MouseX = x;
+			Device->MouseY = y;
+			Device->VitaPointerX = x;
+			Device->VitaPointerY = y;
+			return;
+#endif
 #if !defined(__ANDROID__) && !defined(_IRR_EMSCRIPTEN_PLATFORM_)
 			// On Android, this somehow results in a camera jump when enabling
 			// relative mouse mode and it isn't supported anyway.

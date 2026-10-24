@@ -374,11 +374,5 @@ bool open_directory(const std::string &path);
 
 #ifdef __vita__
 #include "porting_vita.h"
-#define VITA_CHECKPOINT_STR2(x) #x
-#define VITA_CHECKPOINT_STR(x) VITA_CHECKPOINT_STR2(x)
-/// Records that the main thread got here, see porting::vita::checkpoint()
-#define VITA_CHECKPOINT(what) \
-	porting::vita::checkpoint(__FILE__ ":" VITA_CHECKPOINT_STR(__LINE__) " " what)
-#else
-#define VITA_CHECKPOINT(what) do {} while (0)
 #endif
+#include "porting_checkpoint.h"

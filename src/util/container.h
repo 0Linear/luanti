@@ -9,6 +9,7 @@
 #include "exceptions.h"
 #include "threading/mutex_auto_lock.h"
 #include "threading/semaphore.h"
+#include "porting_checkpoint.h"
 #include <list>
 #include <vector>
 #include <map>
@@ -168,14 +169,18 @@ public:
 
 	T pop_front(u32 wait_time_max_ms)
 	{
+		VITA_CHECKPOINT("MutexedQueue::pop_front: wait");
 		if (m_signal.wait(wait_time_max_ms)) {
+			VITA_CHECKPOINT("MutexedQueue::pop_front: lock");
 			MutexAutoLock lock(m_mutex);
 
+			VITA_CHECKPOINT("MutexedQueue::pop_front: pop");
 			T t = std::move(m_queue.front());
 			m_queue.pop_front();
 			return t;
 		}
 
+		VITA_CHECKPOINT("MutexedQueue::pop_front: throw");
 		throw ItemNotFoundException("MutexedQueue: queue is empty");
 	}
 
