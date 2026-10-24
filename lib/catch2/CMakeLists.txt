@@ -16,3 +16,7 @@ add_library(catch2 STATIC catch_amalgamated.cpp catch_amalgamated.hpp)
 target_compile_definitions(catch2 PRIVATE CATCH_CONFIG_NOSTDOUT CATCH_AMALGAMATED_CUSTOM_MAIN)
 add_library(Catch2::Catch2 ALIAS catch2)
 target_include_directories(catch2 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+if(VITA)
+	# No sigaltstack on the PlayStation Vita
+	target_compile_definitions(catch2 PUBLIC CATCH_CONFIG_NO_POSIX_SIGNALS)
+endif()

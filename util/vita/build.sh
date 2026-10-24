@@ -19,6 +19,8 @@
 #  BUILD_CURL, BUILD_LIBZIP  1 = always build from source, 0 = never,
 #                     auto (default) = only if the SDK's copy is broken
 #  CMAKE_BUILD_TYPE   default: Release
+#  VITA_CMAKE_ARGS    extra CMake arguments, e.g. -DBUILD_UNITTESTS=ON to run
+#                     the unit tests in Vita3K (luanti --run-unittests)
 
 topdir=$(cd "$(dirname "$0")/../.." && pwd)
 builddir=$(realpath -m "${1:-$topdir/build/vita}")
@@ -111,7 +113,7 @@ cmake "$topdir" -G Ninja \
 	-DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}" \
 	-DENABLE_LTO="${ENABLE_LTO:-1}" \
 	-DSQLITE3_AMALGAMATION_DIR="$builddir/deps/sqlite" \
-	"${vitagl_args[@]}" "${dep_args[@]}"
+	"${vitagl_args[@]}" "${dep_args[@]}" ${VITA_CMAKE_ARGS:-}
 
 cmake --build . --parallel "$(nproc)"
 
