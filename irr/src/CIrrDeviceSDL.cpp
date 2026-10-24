@@ -820,6 +820,9 @@ bool CIrrDeviceSDL::run()
 		switch (SDL_event.type) {
 		case SDL_EVENT_MOUSE_MOTION: {
 			SDL_Keymod keymod = SDL_GetModState();
+#ifdef VITA_INPUT_DEBUG
+			{ char b[128]; snprintf(b, sizeof(b), "SDL mouse motion which=%u %d,%d", (unsigned)SDL_event.motion.which, (int)SDL_event.motion.x, (int)SDL_event.motion.y); os::Printer::log(b, ELL_INFORMATION); }
+#endif
 
 			irrevent.EventType = EET_MOUSE_INPUT_EVENT;
 			irrevent.MouseInput.Event = EMIE_MOUSE_MOVED;
@@ -877,6 +880,9 @@ bool CIrrDeviceSDL::run()
 		}
 		case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		case SDL_EVENT_MOUSE_BUTTON_UP: {
+#ifdef VITA_INPUT_DEBUG
+			{ char b[128]; snprintf(b, sizeof(b), "SDL mouse button which=%u btn=%d %d,%d", (unsigned)SDL_event.button.which, (int)SDL_event.button.button, (int)SDL_event.button.x, (int)SDL_event.button.y); os::Printer::log(b, ELL_INFORMATION); }
+#endif
 			SDL_Keymod keymod = SDL_GetModState();
 
 			irrevent.EventType = EET_MOUSE_INPUT_EVENT;
@@ -1032,6 +1038,9 @@ bool CIrrDeviceSDL::run()
 			break;
 
 		case SDL_EVENT_FINGER_DOWN:
+#ifdef VITA_INPUT_DEBUG
+			{ char b[128]; snprintf(b, sizeof(b), "SDL finger down touch=%d %f,%f", (int)SDL_event.tfinger.touchId, SDL_event.tfinger.x, SDL_event.tfinger.y); os::Printer::log(b, ELL_INFORMATION); }
+#endif
 			irrevent.EventType = EET_TOUCH_INPUT_EVENT;
 			irrevent.TouchInput.Event = ETIE_PRESSED_DOWN;
 			get_touch_id_x_y();

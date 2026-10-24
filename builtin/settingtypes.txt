@@ -2106,11 +2106,12 @@ vita_param_buffer_size (GPU parameter buffer size) int 24 4 64
 #    Requires: vita
 vita_triple_buffering (Triple buffering) bool true
 
-#    Compile Lua code to native ARM code (LuaJIT JIT). Much faster mods and
-#    map generation. Disable if the game crashes in Lua code.
+#    Compile Lua code to native ARM code (LuaJIT JIT). Faster mods, but
+#    experimental: in Vita3K, where the JIT can't get executable memory, it
+#    hangs while a game loads. The interpreter is used otherwise.
 #
 #    Requires: vita
-vita_luajit_jit (LuaJIT JIT compiler) bool true
+vita_luajit_jit (LuaJIT JIT compiler) bool false
 
 #    With VSync enabled, show each frame for this many display refreshes:
 #    1 = up to 60 FPS, 2 = 30 FPS, 3 = 20 FPS. A stable 30 FPS can feel

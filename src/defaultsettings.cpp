@@ -618,7 +618,7 @@ void set_default_settings()
 	settings->setDefault("vita_overclock", "true");
 	settings->setDefault("vita_param_buffer_size", "24");
 	settings->setDefault("vita_triple_buffering", "true");
-	settings->setDefault("vita_luajit_jit", "true");
+	settings->setDefault("vita_luajit_jit", "false");
 	settings->setDefault("vita_vblank_interval", "1");
 
 	settings->setDefault("video_driver", "ogles2");

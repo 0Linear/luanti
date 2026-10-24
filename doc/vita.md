@@ -107,8 +107,9 @@ those cores. The defaults aim for 60 FPS:
   mapblock mesh is freed once it has been uploaded, nearly halving the memory
   used by map geometry.
 * **Per-vertex fog** (`vertex_fog`).
-* **LuaJIT with its JIT compiler** (`vita_luajit_jit`), for mods and Lua
-  map generators.
+* **LuaJIT** runs Lua in its fast interpreter. The JIT compiler
+  (`vita_luajit_jit`) is off by default: it hangs while loading a game in
+  Vita3K, and is untested on real hardware.
 
 Things worth trying in *Settings → Advanced* and the graphics settings:
 
