@@ -312,6 +312,7 @@ void RenderingEngine::draw_load_screen(const std::wstring &text,
 	auto *driver = get_video_driver();
 
 	driver->setFog(m_menu_sky_color);
+	VITA_CHECKPOINT("load screen: begin");
 	driver->beginScene(true, true, m_menu_sky_color);
 
 	if (g_settings->getBool("menu_clouds")) {
@@ -387,7 +388,9 @@ void RenderingEngine::draw_load_screen(const std::wstring &text,
 	}
 
 	guienv->drawAll();
+	VITA_CHECKPOINT("load screen: end scene");
 	driver->endScene();
+	VITA_CHECKPOINT("load screen: done");
 	guitext->remove();
 	if (gui_bottom_text)
 		gui_bottom_text->remove();

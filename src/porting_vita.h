@@ -69,6 +69,14 @@ uint32_t getMemoryBudgetMB();
 /// Keeps the screen and the system awake while the game is running.
 void keepAwake();
 
+/*
+	Stall diagnostics: the main thread records where it is (VITA_CHECKPOINT
+	in porting.h). If it stops making progress for 10 seconds, a watchdog
+	thread writes the last checkpoints to the log.
+*/
+void checkpoint(const char *where);
+void startWatchdog();
+
 } // namespace vita
 
 } // namespace porting

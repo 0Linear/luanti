@@ -1112,14 +1112,19 @@ bool Game::getServerContent(bool *aborted)
 	fps_control.reset();
 
 	auto framemarker = FrameMarker("Game::getServerContent()-frame").started();
+	VITA_CHECKPOINT("content: run");
 	while (m_rendering_engine->run()) {
+		VITA_CHECKPOINT("content: limit");
 		framemarker.end();
 		fps_control.limit(device, &dtime);
 		framemarker.start();
 
 		// Update client and server
+		VITA_CHECKPOINT("content: step");
 		step(dtime);
+		VITA_CHECKPOINT("content: stepped");
 
+		VITA_CHECKPOINT("content: end condition");
 		// End condition
 		if (client->mediaReceived() && client->itemdefReceived() &&
 				client->nodedefReceived()) {
@@ -1154,10 +1159,12 @@ bool Game::getServerContent(bool *aborted)
 
 		if (!client->itemdefReceived()) {
 			progress = 25;
+			VITA_CHECKPOINT("content: draw item definitions");
 			m_rendering_engine->draw_load_screen(wstrgettext("Item definitions..."),
 					guienv, texture_src, dtime, progress);
 		} else if (!client->nodedefReceived()) {
 			progress = 30;
+			VITA_CHECKPOINT("content: draw node definitions");
 			m_rendering_engine->draw_load_screen(wstrgettext("Node definitions..."),
 					guienv, texture_src, dtime, progress);
 		} else {
@@ -2131,11 +2138,14 @@ inline void Game::step(f32 dtime)
 				m_is_paused
 			});
 
+		VITA_CHECKPOINT("game: server step");
 		server->step();
 	}
 
+	VITA_CHECKPOINT("game: client step");
 	if (!m_is_paused)
 		client->step(dtime);
+	VITA_CHECKPOINT("game: stepped");
 }
 
 static void pauseNodeAnimation(PausedNodesList &paused, scene::ISceneNode *node) {

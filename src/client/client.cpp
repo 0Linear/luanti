@@ -563,6 +563,7 @@ void Client::step(float dtime)
 	}
 
 	// Step environment (also handles player controls)
+	VITA_CHECKPOINT("client: env/sound step");
 	m_env.step(dtime);
 	m_sound->step(dtime);
 
@@ -623,6 +624,7 @@ void Client::step(float dtime)
 		std::vector<v3s16> blocks_to_ack;
 		bool force_update_shadows = false;
 		MeshUpdateResult r;
+		VITA_CHECKPOINT("client: mesh results");
 		while (m_mesh_update_manager->getNextResult(r))
 		{
 			num_processed_meshes++;
@@ -1034,9 +1036,12 @@ void Client::ReceiveAll()
 
 		pkt.clear();
 		try {
+			VITA_CHECKPOINT("client: TryReceive");
 			if (!m_con->TryReceive(&pkt))
 				break;
+			VITA_CHECKPOINT("client: ProcessData");
 			ProcessData(&pkt);
+			VITA_CHECKPOINT("client: processed");
 		} catch (const con::InvalidIncomingDataException &e) {
 			infostream << "Client::ReceiveAll(): "
 					"InvalidIncomingDataException: what()="

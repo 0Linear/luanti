@@ -30,6 +30,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <atomic>
+#include <sstream>
 
 #ifndef VITA_NEWLIB_HEAP_MB
 #define VITA_NEWLIB_HEAP_MB 224
@@ -150,6 +152,8 @@ void init()
 
 	sceIoMkdir("ux0:data", 0777);
 	sceIoMkdir(USER_DIR, 0777);
+
+	startWatchdog();
 }
 
 static bool haveShaderCompiler()
@@ -355,6 +359,58 @@ uint32_t getMemoryBudgetMB()
 	if (sceAppMgrGetBudgetInfo(&info) < 0)
 		return 365;
 	return (info.total_user_rw_mem + info.total_extra_mem) >> 20;
+}
+
+namespace {
+	constexpr u32 CHECKPOINT_HISTORY = 16;
+	std::atomic<const char *> checkpoints[CHECKPOINT_HISTORY];
+	std::atomic<u32> checkpoint_count{0};
+
+	int watchdogThread(SceSize, void *)
+	{
+		u32 last_count = checkpoint_count.load();
+		int stalled_s = 0;
+		bool reported = false;
+		while (true) {
+			sceKernelDelayThread(1000 * 1000);
+			const u32 count = checkpoint_count.load();
+			if (count != last_count) {
+				if (reported)
+					errorstream << "Watchdog: main thread is running again" << std::endl;
+				last_count = count;
+				stalled_s = 0;
+				reported = false;
+				continue;
+			}
+			if (++stalled_s < 10 || reported)
+				continue;
+			reported = true;
+			std::ostringstream os;
+			os << "Watchdog: main thread stalled for 10 s, last checkpoints (oldest first):";
+			for (u32 i = 0; i < CHECKPOINT_HISTORY; i++) {
+				const char *c = checkpoints[(count + i) % CHECKPOINT_HISTORY].load();
+				if (c)
+					os << "\n  " << c;
+			}
+			errorstream << os.str() << std::endl;
+		}
+		return 0;
+	}
+}
+
+void checkpoint(const char *where)
+{
+	const u32 n = checkpoint_count.fetch_add(1, std::memory_order_relaxed);
+	checkpoints[n % CHECKPOINT_HISTORY].store(where, std::memory_order_relaxed);
+}
+
+void startWatchdog()
+{
+	SceUID thid = sceKernelCreateThread("luanti_watchdog", watchdogThread,
+			0x10000100, 64 * 1024, 0, SCE_KERNEL_CPU_MASK_USER_1 | SCE_KERNEL_CPU_MASK_USER_2,
+			nullptr);
+	if (thid >= 0)
+		sceKernelStartThread(thid, 0, nullptr);
 }
 
 void keepAwake()
