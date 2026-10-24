@@ -6,6 +6,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#elif defined(__vita__)
+#include <psp2/types.h>
 #elif defined(__MACH__) && defined(__APPLE__)
 #include <mach/semaphore.h>
 #else
@@ -29,6 +31,8 @@ public:
 private:
 #if defined(WIN32)
 	HANDLE semaphore;
+#elif defined(__vita__)
+	SceUID semaphore;
 #elif defined(__MACH__) && defined(__APPLE__)
 	semaphore_t semaphore;
 #else

@@ -634,8 +634,8 @@ void set_default_settings()
 	settings->setDefault("cave_culling", "true");
 	// Simpler meshes beyond this distance, see MeshMakeData::m_lod
 	settings->setDefault("mesh_lod_distance", "32");
-	// Draw the world at 720x408 and scale it up; the HUD and menus stay sharp
-	settings->setDefault("render_scale", "0.75");
+	// render_scale < 1 (rendering the world to a smaller texture) hangs in
+	// Vita3K after the first frame and is untested on hardware: keep it off
 	settings->setDefault("screen_w", "960");
 	settings->setDefault("screen_h", "544");
 	settings->setDefault("fullscreen", "true");

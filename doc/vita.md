@@ -77,8 +77,6 @@ those cores. The defaults aim for 60 FPS:
 
 * **Up to 60 FPS with VSync and triple buffering**
   (`vita_vblank_interval = 1`). Set it to 2 for a locked 30 FPS.
-* **3D world rendered at 75 % resolution** (`render_scale = 0.75`, 720x408)
-  and scaled up; menus, HUD and text stay at full resolution.
 * **Greedy meshing** (`greedy_meshing`): faces of solid nodes that look the
   same (same texture, same light) are merged into large rectangles, which
   saves 35-40 % of the vertices of hilly terrain and much more on flat
@@ -116,8 +114,9 @@ Things worth trying in *Settings → Advanced* and the graphics settings:
 
 * `viewing_range`: the biggest single factor. 32 is very smooth, 64+ is
   heavy.
-* `render_scale`: 1.0 for a sharper picture, 0.5 if the GPU is the limit.
-  If the world stays black while the HUD shows, set it to 1.0 and report it.
+* `render_scale` (experimental): renders the world at a lower resolution,
+  e.g. 0.75. It freezes after loading a world in Vita3K and has not been
+  tested on a real Vita; set it back to 1.0 if the picture freezes.
 * `smooth_lighting`: turning it off speeds up mesh generation and lets
   greedy meshing merge more faces.
 * `mesh_lod_distance`: lower values draw more of the world with less detail.

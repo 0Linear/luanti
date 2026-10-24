@@ -38,6 +38,53 @@
 #endif
 
 
+#ifdef __vita__
+
+/*
+	PlayStation Vita: kernel semaphores. The timed wait of the pthreads
+	library could report success without a count, which made MutexedQueue
+	pop from empty queues.
+*/
+#include <psp2/kernel/threadmgr.h>
+#include <psp2/kernel/error.h>
+#include <climits>
+
+Semaphore::Semaphore(int val)
+{
+	semaphore = sceKernelCreateSema("luanti_sema", 0, val, INT_MAX, nullptr);
+	assert(semaphore >= 0);
+}
+
+Semaphore::~Semaphore()
+{
+	sceKernelDeleteSema(semaphore);
+}
+
+void Semaphore::post(unsigned int num)
+{
+	assert(num > 0);
+	int ret = sceKernelSignalSema(semaphore, num);
+	assert(ret >= 0);
+	UNUSED(ret);
+}
+
+void Semaphore::wait()
+{
+	int ret = sceKernelWaitSema(semaphore, 1, nullptr);
+	assert(ret >= 0);
+	UNUSED(ret);
+}
+
+bool Semaphore::wait(unsigned int time_ms)
+{
+	if (time_ms == 0)
+		return sceKernelPollSema(semaphore, 1) >= 0;
+	SceUInt timeout_us = time_ms * 1000U;
+	return sceKernelWaitSema(semaphore, 1, &timeout_us) >= 0;
+}
+
+#else
+
 Semaphore::Semaphore(int val)
 {
 #ifdef _WIN32
@@ -150,3 +197,4 @@ bool Semaphore::wait(unsigned int time_ms)
 #endif
 }
 
+#endif // __vita__

@@ -240,13 +240,13 @@ void postVideoInit()
 void onThreadStart(const std::string &name)
 {
 	/*
-		Core assignment. The renderer owns core 0. Map generation, mesh
-		generation and the in-process server share cores 1 and 2.
-		Light, latency-sensitive threads (network, sound, HTTP) may also
-		run on the system core, which keeps cores 1 and 2 free for heavy
-		work.
+		Core assignment. The main thread (rendering, client) owns core 0;
+		every other thread runs on cores 1 and 2. The scheduler is strictly
+		priority based, so a busy thread must never share a core with the
+		main thread, and no thread may have a higher priority than it.
+		(The system core is not available to applications.)
 	*/
-	int mask = SCE_KERNEL_CPU_MASK_USER_1 | SCE_KERNEL_CPU_MASK_USER_2;
+	const int mask = SCE_KERNEL_CPU_MASK_USER_1 | SCE_KERNEL_CPU_MASK_USER_2;
 	int prio = 160;
 
 	if (str_starts_with(name, "Mesh")) {
@@ -259,15 +259,21 @@ void onThreadStart(const std::string &name)
 		prio = 150;
 	} else if (str_starts_with(name, "Connection") ||
 			name == "OpenALSoundManager" || name == "CurlFetch") {
-		mask |= SCE_KERNEL_CPU_MASK_SYSTEM;
-		prio = 120;
+		// Light, but latency-sensitive: ahead of the heavy workers
+		prio = 135;
 	} else if (name == "Minimap") {
 		prio = 180;
 	}
 
 	SceUID thid = sceKernelGetThreadId();
-	sceKernelChangeThreadCpuAffinityMask(thid, mask);
-	sceKernelChangeThreadPriority(thid, prio);
+	int ret = sceKernelChangeThreadCpuAffinityMask(thid, mask);
+	if (ret < 0)
+		warningstream << "Thread " << name << ": setting the CPU affinity failed: 0x"
+			<< std::hex << ret << std::dec << std::endl;
+	ret = sceKernelChangeThreadPriority(thid, prio);
+	if (ret < 0)
+		warningstream << "Thread " << name << ": setting the priority failed: 0x"
+			<< std::hex << ret << std::dec << std::endl;
 }
 
 std::string getSystemLanguage()

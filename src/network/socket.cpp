@@ -10,6 +10,9 @@
 #include "constants.h"
 #include "log.h"
 #include "networkexceptions.h"
+#ifdef __vita__
+#include "porting.h"
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -220,8 +223,20 @@ int UDPSocket::Receive(Address &sender, void *data, int size)
 {
 	// Return on timeout
 	assert(m_timeout_ms >= 0);
+#ifdef __vita__
+	// poll() on the Vita may return before the timeout, or report data that
+	// recvfrom() then doesn't have. Make sure the receive thread never spins:
+	// at its priority that would starve other threads on the same core.
+	const u64 wait_start = porting::getTimeMs();
+	if (!WaitData(m_timeout_ms)) {
+		if (porting::getTimeMs() - wait_start < (u64)MYMIN(m_timeout_ms, 2))
+			sleep_ms(1);
+		return -1;
+	}
+#else
 	if (!WaitData(m_timeout_ms))
 		return -1;
+#endif
 
 	size = MYMAX(size, 0);
 
@@ -234,8 +249,12 @@ int UDPSocket::Receive(Address &sender, void *data, int size)
 		received = recvfrom(m_handle, (char *)data, size, 0,
 				(struct sockaddr *)&address, &address_len);
 
-		if (received < 0)
+		if (received < 0) {
+#ifdef __vita__
+			sleep_ms(1);
+#endif
 			return -1;
+		}
 
 		u16 address_port = ntohs(address.sin6_port);
 		IPv6AddressBytes bytes;
@@ -250,8 +269,12 @@ int UDPSocket::Receive(Address &sender, void *data, int size)
 		received = recvfrom(m_handle, (char *)data, size, 0,
 				(struct sockaddr *)&address, &address_len);
 
-		if (received < 0)
+		if (received < 0) {
+#ifdef __vita__
+			sleep_ms(1);
+#endif
 			return -1;
+		}
 
 		u32 address_ip = ntohl(address.sin_addr.s_addr);
 		u16 address_port = ntohs(address.sin_port);
