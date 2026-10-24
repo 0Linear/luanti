@@ -125,6 +125,9 @@ static void initNetwork()
 	sceNetCtlInit();
 }
 
+// For checkpoint(), set in init()
+static SceUID main_thread_id = -1;
+
 void init()
 {
 	// Clocks first: everything after this (including loading builtin Lua and
@@ -458,8 +461,6 @@ namespace {
 		return 0;
 	}
 }
-
-static SceUID main_thread_id = -1;
 
 void checkpoint(const char *where)
 {
